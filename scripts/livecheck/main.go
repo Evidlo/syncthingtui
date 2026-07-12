@@ -10,6 +10,24 @@ import (
 	"github.com/evidlo/syncthingtui/client"
 )
 
+func rawDeviceHasIgnoredFolder(raw map[string]any, deviceID, folderID string) bool {
+	devs, _ := raw["devices"].([]any)
+	for _, d := range devs {
+		dm, _ := d.(map[string]any)
+		if dm["deviceID"] != deviceID {
+			continue
+		}
+		igns, _ := dm["ignoredFolders"].([]any)
+		for _, e := range igns {
+			em, _ := e.(map[string]any)
+			if em["id"] == folderID {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func check(name string, err error) {
 	if err != nil {
 		fmt.Printf("FAIL %-28s %v\n", name, err)
@@ -124,7 +142,52 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Println("ok   device patch reflected")
+
+		// Share-folder-with-device (the alert "Share" action): create a
+		// folder, share it with the peer, verify the device list.
+		tmp2, _ := os.MkdirTemp("", "livecheck-share")
+		defer os.RemoveAll(tmp2)
+		check("POST folder for share test", c.PostFolder(map[string]any{
+			"id": "lcheck-share1", "label": "sharetest", "path": tmp2,
+		}))
+		check("ShareFolderWithDevice", c.ShareFolderWithDevice("lcheck-share1", *peerID))
+		f2, _ := c.FolderByID("lcheck-share1")
+		found := false
+		for _, d := range f2.Devices {
+			found = found || d.DeviceID == *peerID
+		}
+		if !found {
+			fmt.Println("FAIL shared device not in folder device list")
+			os.Exit(1)
+		}
+		fmt.Println("ok   share reflected in folder devices")
+
+		// Ignore-pending-folder (the alert "Ignore" action on a folder offer).
+		check("IgnorePendingFolder", c.IgnorePendingFolder(*peerID, "some-offer", "Offered"))
+		raw, _ := c.RawConfig()
+		if !rawDeviceHasIgnoredFolder(raw, *peerID, "some-offer") {
+			fmt.Println("FAIL ignoredFolders entry missing")
+			os.Exit(1)
+		}
+		fmt.Println("ok   ignore folder reflected in device config")
+
+		check("DELETE folder for share test", c.DeleteFolder("lcheck-share1"))
 		check("DELETE /rest/config/devices/{id}", c.DeleteDevice(*peerID))
+
+		// Ignore-pending-device (the alert "Ignore" action on a device).
+		check("IgnorePendingDevice", c.IgnorePendingDevice(*peerID, "ignored-dev", ""))
+		raw, _ = c.RawConfig()
+		igns, _ := raw["remoteIgnoredDevices"].([]any)
+		found = false
+		for _, e := range igns {
+			em, _ := e.(map[string]any)
+			found = found || em["deviceID"] == *peerID
+		}
+		if !found {
+			fmt.Println("FAIL remoteIgnoredDevices entry missing")
+			os.Exit(1)
+		}
+		fmt.Println("ok   ignore device reflected in config")
 	}
 
 	fmt.Println("ALL OK")

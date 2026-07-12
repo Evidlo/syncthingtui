@@ -39,7 +39,9 @@ type MainModel struct {
 	alerts        []Alert
 	stats         [][2]string
 	stVersion     string
+	myID          string
 	paths         [][2]string
+	actionConfirm string // pending Restart/Shut Down confirmation
 	rates         string
 	flash         string
 	client        *client.Client // nil = fake mode
@@ -58,6 +60,7 @@ func NewMain(c *client.Client) MainModel {
 	if c == nil {
 		m.stVersion = "v2.0.13, Linux (64-bit)"
 		m.paths = AboutPaths
+		m.myID = DeviceID
 	}
 	return m
 }
@@ -65,7 +68,7 @@ func NewMain(c *client.Client) MainModel {
 // setData applies a live snapshot, keeping cursors in range.
 func (m *MainModel) setData(d dataMsg) {
 	m.folders, m.devices, m.alerts, m.stats = d.folders, d.devices, d.alerts, d.stats
-	m.stVersion, m.paths = d.stVersion, d.paths
+	m.stVersion, m.paths, m.myID = d.stVersion, d.paths, d.myID
 	m.folderIdx = clamp(m.folderIdx, 0, len(m.folders)+1)
 	m.deviceIdx = clamp(m.deviceIdx, 0, len(m.devices)+1)
 	m.alertIdx = clamp(m.alertIdx, 0, max(0, len(m.alerts)-1))
@@ -303,8 +306,10 @@ func (m MainModel) updateAlerts(key string) (tea.Model, tea.Cmd) {
 	case "enter":
 		button := sel.Buttons[m.alertBtn]
 		m.flash = fmt.Sprintf("%s: %s", sel.Title, button)
-		m.alerts = append(m.alerts[:m.alertIdx], m.alerts[m.alertIdx+1:]...)
-		m.alertIdx, m.alertBtn = clamp(m.alertIdx, 0, max(0, len(m.alerts)-1)), 0
+		if m.client == nil { // fake mode: remove locally; live mode refetches truth
+			m.alerts = append(m.alerts[:m.alertIdx], m.alerts[m.alertIdx+1:]...)
+			m.alertIdx, m.alertBtn = clamp(m.alertIdx, 0, max(0, len(m.alerts)-1)), 0
+		}
 		switch button {
 		case "OK": // clears the whole system error list, like the web GUI
 			return m, m.action(
@@ -319,31 +324,103 @@ func (m MainModel) updateAlerts(key string) (tea.Model, tea.Cmd) {
 					return c.DismissPendingFolder(sel.ID)
 				},
 				func() {})
+		case "Ignore":
+			return m, m.action(
+				func(c *client.Client) error {
+					if sel.Kind == "device" {
+						return c.IgnorePendingDevice(sel.ID, sel.Short, sel.Addr)
+					}
+					return c.IgnorePendingFolder(sel.DeviceID, sel.ID, sel.Short)
+				},
+				func() {})
+		case "Share": // accept offer for a folder we already have
+			return m, m.action(
+				func(c *client.Client) error { return c.ShareFolderWithDevice(sel.ID, sel.DeviceID) },
+				func() {})
+		case "Add": // offered folder is new here: open Add Folder prefilled
+			return m, m.openFolderOffer(sel.ID, sel.Short, sel.DeviceID)
 		case "Add Device":
 			return m, m.openDeviceEditor("", client.DeviceCfg{DeviceID: sel.ID, Name: sel.Short}, true)
-		default:
-			m.flash += ": not wired yet (stage 4 TODO)" // Ignore, Share, Add folder
 		}
 	}
 	return m, nil
 }
 
+// openFolderOffer opens Add Folder prefilled from a pending offer (folder ID,
+// label, and the offering device pre-shared).
+func (m *MainModel) openFolderOffer(id, label, deviceID string) tea.Cmd {
+	if m.client == nil {
+		return open(NewEditFolder(label, true))
+	}
+	c := m.client
+	return func() tea.Msg {
+		cfg, err := c.Config()
+		if err != nil {
+			return dataMsg{err: err}
+		}
+		status, err := c.SystemStatus()
+		if err != nil {
+			return dataMsg{err: err}
+		}
+		f := client.FolderCfg{ID: id, Label: label, Path: "~/" + label,
+			Type: "sendreceive", Order: "random", RescanIntervalS: 3600, FSWatcherEnabled: true,
+			Devices: []client.FolderDevice{{DeviceID: deviceID}}}
+		return openMsg{view: newEditFolder(c, f, cfg.Devices, status.MyID, nil, true)}
+	}
+}
+
 func (m MainModel) updateActions(key string) (tea.Model, tea.Cmd) {
 	switch key {
 	case "up", "k":
-		m.actionIdx = clamp(m.actionIdx-1, 0, len(ActionItems)-1)
+		m.actionIdx, m.actionConfirm = clamp(m.actionIdx-1, 0, len(ActionItems)-1), ""
 	case "down", "j":
-		m.actionIdx = clamp(m.actionIdx+1, 0, len(ActionItems)-1)
+		m.actionIdx, m.actionConfirm = clamp(m.actionIdx+1, 0, len(ActionItems)-1), ""
 	case "enter":
-		switch ActionItems[m.actionIdx] {
+		item := ActionItems[m.actionIdx]
+		switch item {
 		case "Settings":
-			return m, open(NewSettings())
+			if m.client == nil {
+				return m, open(NewSettings())
+			}
+			c := m.client
+			return m, func() tea.Msg {
+				opts, err := c.Options()
+				if err != nil {
+					return dataMsg{err: err}
+				}
+				gui, err := c.GUIConfig()
+				if err != nil {
+					return dataMsg{err: err}
+				}
+				status, err := c.SystemStatus()
+				if err != nil {
+					return dataMsg{err: err}
+				}
+				self, _ := c.DeviceByID(status.MyID)
+				return openMsg{view: newSettings(c, opts, gui, self.Name, status.MyID)}
+			}
 		case "Show ID":
-			return m, open(NewShowID())
+			return m, open(NewShowID(m.myID))
 		case "About":
 			return m, open(NewAbout(m.stVersion, m.paths))
+		case "Restart", "Shut Down":
+			if m.actionConfirm != item { // destructive: require a second enter
+				m.actionConfirm = item
+				m.flash = "press enter again to " + strings.ToLower(item) + " syncthing"
+				return m, nil
+			}
+			m.actionConfirm = ""
+			m.flash = item + " sent"
+			return m, m.action(
+				func(c *client.Client) error {
+					if item == "Restart" {
+						return c.Restart()
+					}
+					return c.Shutdown()
+				},
+				func() {})
 		default:
-			m.flash = ActionItems[m.actionIdx] + ": not in mockup scope"
+			m.flash = item + ": not implemented"
 		}
 	}
 	return m, nil

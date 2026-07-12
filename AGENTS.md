@@ -24,11 +24,13 @@ Parity spec: GUI.yaml contains hierarchal description of TUI elements (keep up t
 
 # Tests
 
-- ./scripts/test_live.sh   integration smoke: throwaway syncthing in /tmp
-  (never the user's real one) + scripts/livecheck: all endpoints, pause and
-  error-clear round-trips. Local syncthing is v1.18 (old CLI; script handles both).
+- go test ./...   the whole suite: alert-dispatch + screen-width tests (app/)
+  and full REST integration (client/ wraps scripts/test_live.sh: throwaway
+  syncthing in /tmp — never the user's real one; skips without syncthing
+  binary or with -short). Local syncthing is v1.18 (old CLI; script handles both).
 - go run ./scripts/rocheck   read-only GETs against the user's real instance.
-- Width check: render every -screen at 80x60, strip ANSI, assert ≤80 cols.
+- Rule: every wired action gets a livecheck assert; every new screen is
+  covered by the width test automatically (register it in app.go presets).
 - No go tests yet; when adding features, add an assert to livecheck per action.
 
 # Conventions

@@ -38,13 +38,27 @@ device (opens Add Device prefilled with its ID; Save POSTs it). livecheck
 covers folder+device lifecycle (create/patch/verify/delete; needs valid
 peer ID — test_live.sh generates a 2nd identity).
 
-Remaining stage-4 work:
-1. Settings Save (options/gui PATCH; fiddly: minHomeDiskFree object, urAccepted ints, upgrade split key) + Settings load live values
-2. Alert Share Folder / Ignore actions (share = PATCH folder devices[]; ignore lists remoteIgnoredDevices / folder ignoredFolders)
-3. /rest/events long-poll instead of 3s polling
-4. Actions tab: Show ID uses real ID+QR, restart/shutdown/logs endpoints
-5. Proper Go integration tests (port scripts/livecheck into go test with harness)
-6. Restore Versions view (per-folder Versions button; see GUI.yaml) — design + wire
+Alert actions fully wired (bug fix: Share/Ignore fell through to a stub that
+removed the alert locally; poll restored it 3s later). Share = append device
+to folder devices[]; Ignore = remoteIgnoredDevices / device ignoredFolders
+(raw config GET-modify-PUT); folder offers now split New Folder (Add → editor
+prefilled with offered ID + device) vs Share Folder (known ID) like web GUI.
+Live mode no longer removes alerts locally — refetch is the truth.
+First go tests: app/alerts_test.go (every alert button must dispatch to a real
+handler — regression for the Share bug; run `go test ./...`). livecheck adds
+share + ignore round-trips.
+
+Stage 4 complete (2026-07-12). Final chunk: Settings live load + Save
+(options/gui PATCH; specials: minHomeDiskFree {value,unit}, urAccepted ints,
+upgrades → autoUpgradeIntervalH+upgradeToPreReleases, password only sent if
+changed); Show ID real device ID + real QR (skip2/go-qrcode, half-blocks);
+Restart/Shut Down wired with press-enter-twice confirm. Tests: `go test ./...`
+= alert dispatch + width checks (app/) + full REST integration via
+test_live.sh wrapper (client/, skips without syncthing or with -short).
+
+Dropped (poor cost/benefit, user agreed): /rest/events long-poll (3s poll
+fine), Restore Versions view (use web GUI; GUI.yaml documents it as TODO),
+two-instance pending-offer harness, Logs/Support Bundle/Log Out.
 
 Stage-3 walkthrough approved by user 2026-07-12. Stage-3 app details:
 - Interactive app: `go run ./cmd/syncthingtui` (q quits, altscreen)

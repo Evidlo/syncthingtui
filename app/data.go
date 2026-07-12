@@ -18,7 +18,7 @@ type Device struct {
 
 type Alert struct {
 	Kind, Title, Short, Time, Body string
-	ID, DeviceID                   string // pending device/folder IDs (live mode)
+	ID, DeviceID, Addr             string // pending device/folder details (live mode)
 	Buttons                        []string
 }
 
@@ -38,13 +38,16 @@ var Devices = []Device{
 var Alerts = []Alert{
 	{"device", "New Device", "workpc", "2026-07-12 09:14",
 		`Device "workpc" (MFZWI3D-BONSGYC-... at 10.0.0.9:22000) wants to connect. Add new device?`,
-		"", "", []string{"Add Device", "Ignore", "Dismiss"}},
+		"", "", "", []string{"Add Device", "Ignore", "Dismiss"}},
 	{"folder", "Share Folder", "Books", "2026-07-12 09:20",
 		`laptop wants to share folder "Books" (ij9kl-mn0op). Share this folder?`,
-		"", "", []string{"Share", "Ignore", "Dismiss"}},
+		"", "", "", []string{"Share", "Ignore", "Dismiss"}},
+	{"folder", "New Folder", "Papers", "2026-07-12 09:25",
+		`laptop wants to share folder "Papers" (qr1st-uv2wx). Add new folder?`,
+		"", "", "", []string{"Add", "Ignore", "Dismiss"}},
 	{"notice", "Notice", "", "2026-07-12 10:02",
 		`Error on folder "Default Folder" (default): insufficient space on disk for database (~/.config/syncthing/index-v0.14.0.db): 0.2 % < 1 %`,
-		"", "", []string{"OK"}},
+		"", "", "", []string{"OK"}},
 }
 
 var ThisDeviceStats = [][2]string{

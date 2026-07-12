@@ -6,17 +6,19 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	qrcode "github.com/skip2/go-qrcode"
 )
 
 // ── Show ID ──────────────────────────────────────────────────────────────────
 
 type ShowIDView struct {
+	id            string
 	btn           int
 	width, height int
 	flash         string
 }
 
-func NewShowID() ShowIDView { return ShowIDView{} }
+func NewShowID(id string) ShowIDView { return ShowIDView{id: id} }
 
 func (v ShowIDView) Init() tea.Cmd { return nil }
 
@@ -41,27 +43,18 @@ func (v ShowIDView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return v, nil
 }
 
-// fakeQR renders a placeholder QR with half-block characters; the real app
-// will render an actual QR (e.g. skip2/go-qrcode) the same way.
-func fakeQR(n int) string {
-	mod := func(x, y int) bool {
-		finder := func(cx, cy int) bool {
-			dx, dy := x-cx, y-cy
-			if dx < 0 || dy < 0 || dx > 6 || dy > 6 {
-				return false
-			}
-			return dx == 0 || dy == 0 || dx == 6 || dy == 6 ||
-				(dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4)
-		}
-		if finder(0, 0) || finder(n-7, 0) || finder(0, n-7) {
-			return true
-		}
-		return (x*7+y*13+x*y)%5 < 2
+// qrBlock renders text as a QR code using half-block characters (2 modules
+// per terminal row).
+func qrBlock(text string) string {
+	q, err := qrcode.New(text, qrcode.Medium)
+	if err != nil {
+		return ""
 	}
+	grid := q.Bitmap() // includes quiet-zone border
 	var b strings.Builder
-	for y := 0; y < n; y += 2 {
-		for x := 0; x < n; x++ {
-			top, bot := mod(x, y), y+1 < n && mod(x, y+1)
+	for y := 0; y < len(grid); y += 2 {
+		for x := range grid[y] {
+			top, bot := grid[y][x], y+1 < len(grid) && grid[y+1][x]
 			b.WriteString(map[[2]bool]string{
 				{true, true}: "█", {true, false}: "▀",
 				{false, true}: "▄", {false, false}: " ",
@@ -73,12 +66,16 @@ func fakeQR(n int) string {
 }
 
 func (v ShowIDView) View() string {
+	id := v.id
+	if len(id) < 63 {
+		id = DeviceID // defensive: myID not fetched yet
+	}
 	idBox := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(accent).
-		Padding(1, 3).Bold(true).Render(DeviceID[:31] + "\n" + DeviceID[32:])
+		Padding(1, 3).Bold(true).Render(id[:31] + "\n" + id[32:])
 	body := lipgloss.Place(v.width, max(1, v.height-5), lipgloss.Center, lipgloss.Center,
 		lipgloss.JoinVertical(lipgloss.Center,
 			"Share this ID with other devices to connect.", "", idBox, "",
-			fakeQR(25), "",
+			qrBlock(id), "",
 			buttonRow([]string{"Copy", "Close"}, v.btn)))
 	right := netRates
 	if v.flash != "" {

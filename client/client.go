@@ -144,6 +144,37 @@ type DBStatus struct {
 	LocalFiles  int64  `json:"localFiles"`
 }
 
+type SizeCfg struct {
+	Value float64 `json:"value"`
+	Unit  string  `json:"unit"`
+}
+
+type OptionsCfg struct {
+	ListenAddresses       []string `json:"listenAddresses"`
+	GlobalAnnounceServers []string `json:"globalAnnounceServers"`
+	GlobalAnnounceEnabled bool     `json:"globalAnnounceEnabled"`
+	LocalAnnounceEnabled  bool     `json:"localAnnounceEnabled"`
+	RelaysEnabled         bool     `json:"relaysEnabled"`
+	NATEnabled            bool     `json:"natEnabled"`
+	MaxRecvKbps           int      `json:"maxRecvKbps"`
+	MaxSendKbps           int      `json:"maxSendKbps"`
+	LimitBandwidthInLan   bool     `json:"limitBandwidthInLan"`
+	StartBrowser          bool     `json:"startBrowser"`
+	URAccepted            int      `json:"urAccepted"`
+	AutoUpgradeIntervalH  int      `json:"autoUpgradeIntervalH"`
+	UpgradeToPreReleases  bool     `json:"upgradeToPreReleases"`
+	MinHomeDiskFree       SizeCfg  `json:"minHomeDiskFree"`
+}
+
+type GUICfg struct {
+	Address  string `json:"address"`
+	User     string `json:"user"`
+	Password string `json:"password"`
+	UseTLS   bool   `json:"useTLS"`
+	Theme    string `json:"theme"`
+	APIKey   string `json:"apiKey"`
+}
+
 type Version struct {
 	Version string `json:"version"`
 	OS      string `json:"os"`
@@ -283,12 +314,103 @@ func (c *Client) SetIgnores(folder string, lines []string) error {
 		map[string][]string{"ignore": lines}, nil)
 }
 
+// ShareFolderWithDevice adds deviceID to an existing folder's device list
+// (accepting a pending "share folder" offer).
+func (c *Client) ShareFolderWithDevice(folderID, deviceID string) error {
+	f, err := c.FolderByID(folderID)
+	if err != nil {
+		return err
+	}
+	for _, d := range f.Devices {
+		if d.DeviceID == deviceID {
+			return nil
+		}
+	}
+	return c.PatchFolder(folderID, map[string]any{
+		"devices": append(f.Devices, FolderDevice{DeviceID: deviceID}),
+	})
+}
+
+// RawConfig fetches the whole config as a generic map (preserves keys the
+// typed Config struct doesn't model, for safe read-modify-PUT updates).
+func (c *Client) RawConfig() (map[string]any, error) {
+	var v map[string]any
+	return v, c.get("/rest/config", &v)
+}
+
+func (c *Client) PutRawConfig(cfg map[string]any) error {
+	return c.do("PUT", "/rest/config", cfg, nil)
+}
+
+// IgnorePendingDevice permanently ignores a pending device
+// (config.remoteIgnoredDevices), suppressing further notifications.
+func (c *Client) IgnorePendingDevice(deviceID, name, address string) error {
+	cfg, err := c.RawConfig()
+	if err != nil {
+		return err
+	}
+	arr, _ := cfg["remoteIgnoredDevices"].([]any)
+	cfg["remoteIgnoredDevices"] = append(arr, map[string]any{
+		"deviceID": deviceID, "name": name, "address": address,
+		"time": time.Now().Format(time.RFC3339),
+	})
+	return c.PutRawConfig(cfg)
+}
+
+// IgnorePendingFolder permanently ignores a folder offered by deviceID
+// (that device's ignoredFolders list).
+func (c *Client) IgnorePendingFolder(deviceID, folderID, label string) error {
+	cfg, err := c.RawConfig()
+	if err != nil {
+		return err
+	}
+	devs, _ := cfg["devices"].([]any)
+	for _, d := range devs {
+		dm, ok := d.(map[string]any)
+		if !ok || dm["deviceID"] != deviceID {
+			continue
+		}
+		arr, _ := dm["ignoredFolders"].([]any)
+		dm["ignoredFolders"] = append(arr, map[string]any{
+			"id": folderID, "label": label,
+			"time": time.Now().Format(time.RFC3339),
+		})
+	}
+	return c.PutRawConfig(cfg)
+}
+
 func (c *Client) SetFolderPaused(id string, paused bool) error {
 	return c.do("PATCH", "/rest/config/folders/"+id, map[string]bool{"paused": paused}, nil)
 }
 
 func (c *Client) SetDevicePaused(id string, paused bool) error {
 	return c.do("PATCH", "/rest/config/devices/"+id, map[string]bool{"paused": paused}, nil)
+}
+
+func (c *Client) Options() (OptionsCfg, error) {
+	var v OptionsCfg
+	return v, c.get("/rest/config/options", &v)
+}
+
+func (c *Client) GUIConfig() (GUICfg, error) {
+	var v GUICfg
+	return v, c.get("/rest/config/gui", &v)
+}
+
+func (c *Client) PatchOptions(patch map[string]any) error {
+	return c.do("PATCH", "/rest/config/options", patch, nil)
+}
+
+func (c *Client) PatchGUI(patch map[string]any) error {
+	return c.do("PATCH", "/rest/config/gui", patch, nil)
+}
+
+func (c *Client) Restart() error {
+	return c.do("POST", "/rest/system/restart", nil, nil)
+}
+
+func (c *Client) Shutdown() error {
+	return c.do("POST", "/rest/system/shutdown", nil, nil)
 }
 
 func (c *Client) Errors() ([]SystemError, error) {

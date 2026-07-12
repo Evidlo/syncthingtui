@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -144,7 +145,10 @@ func NewEditFolder(label string, isNew bool) FormView {
 func newEditFolder(c *client.Client, f client.FolderCfg, devs []client.DeviceCfg, myID string, ignores []string, isNew bool) FormView {
 	title, sub := "Edit Folder", f.Label
 	if isNew {
-		title, sub, f.ID = "Add Folder", "new", randomFolderID()
+		title, sub = "Add Folder", "new"
+		if f.ID == "" { // pending offers arrive with the remote's folder ID
+			f.ID = randomFolderID()
+		}
 	}
 	if f.Versioning.Params == nil {
 		f.Versioning.Params = map[string]string{}
@@ -317,41 +321,121 @@ func newEditDevice(c *client.Client, d client.DeviceCfg, isNew bool) FormView {
 	return v
 }
 
-// ── Settings (Save not wired yet — stage-4 TODO) ─────────────────────────────
+// ── Settings ─────────────────────────────────────────────────────────────────
 
+func splitList(s string) []string {
+	var out []string
+	for _, e := range strings.Split(s, ",") {
+		if e = strings.TrimSpace(e); e != "" {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// NewSettings is the fake-mode/mockup constructor.
 func NewSettings() FormView {
+	opts := client.OptionsCfg{
+		ListenAddresses: []string{"default"}, GlobalAnnounceServers: []string{"default"},
+		GlobalAnnounceEnabled: true, LocalAnnounceEnabled: true, RelaysEnabled: true,
+		NATEnabled: true, URAccepted: -1, AutoUpgradeIntervalH: 12,
+		MinHomeDiskFree: client.SizeCfg{Value: 1, Unit: "%"},
+	}
+	gui := client.GUICfg{Address: "127.0.0.1:8384", User: "evan", Password: "hunter2",
+		UseTLS: true, Theme: "dark", APIKey: "abcDEF123..."}
+	return newSettings(nil, opts, gui, "this-machine", "")
+}
+
+func newSettings(c *client.Client, opts client.OptionsCfg, gui client.GUICfg, selfName, myID string) FormView {
 	settingsButtons := []string{"Save", "Close"}
-	// config keys: options/gui objects in /rest/config (except self device name)
+	upgrades := "stable"
+	switch {
+	case opts.AutoUpgradeIntervalH == 0:
+		upgrades = "none"
+	case opts.UpgradeToPreReleases:
+		upgrades = "candidate"
+	}
 	general := NewForm(settingsButtons,
-		Text("Device Name", "Shown to other devices", "this-machine"),         // devices[self].name
-		Text("Minimum Free Disk Space", "On the home (database) disk", "1 %"), // options.minHomeDiskFree
-		RO("API Key", "Key for API access", "abcDEF123..."),                   // gui.apiKey
+		Text("Device Name", "Shown to other devices", selfName).K("self.name"),
+		Text("Minimum Free Disk Space", `On the home (database) disk, e.g. "1 %" or "10 GB"`,
+			fmt.Sprintf("%g %s", opts.MinHomeDiskFree.Value, opts.MinHomeDiskFree.Unit)).K("options.minHomeDiskFree"),
+		RO("API Key", "Key for API access", gui.APIKey),
 		Sel("Anonymous Usage Reporting", "Send anonymous usage statistics",
-			[]string{"Version 3", "Version 2", "Undecided", "Disabled"}, "Disabled"), // options.urAccepted
+			[]string{"Version 3", "Version 2", "Undecided", "Disabled"},
+			fmt.Sprint(opts.URAccepted)).Vals("3", "2", "0", "-1").K("options.urAccepted"),
 		Sel("Automatic Upgrades", "Upgrade policy",
-			[]string{"No Upgrades", "Stable Releases Only", "Stable Releases and Release Candidates"}, "Stable Releases Only"), // options.autoUpgradeIntervalH + upgradeToPreReleases
+			[]string{"No Upgrades", "Stable Releases Only", "Stable Releases and Release Candidates"},
+			upgrades).Vals("none", "stable", "candidate").K("upgrades"),
 	)
-	gui := NewForm(settingsButtons,
-		Text("GUI Listen Address", "Non-privileged port 1024-65535", "127.0.0.1:8384"), // gui.address
-		Text("GUI Authentication User", "Username for GUI access", "evan"),             // gui.user
-		Pass("GUI Authentication Password", "Password for GUI access", "hunter2"),      // gui.password
-		Bool("Use HTTPS for GUI", "Enable HTTPS", true),                                // gui.useTLS
-		Bool("Start Browser", "Open browser when Syncthing starts", false),             // options.startBrowser
+	guiForm := NewForm(settingsButtons,
+		Text("GUI Listen Address", "Non-privileged port 1024-65535", gui.Address).K("gui.address"),
+		Text("GUI Authentication User", "Username for GUI access", gui.User).K("gui.user"),
+		Pass("GUI Authentication Password", "Password for GUI access", gui.Password).K("gui.password"),
+		Bool("Use HTTPS for GUI", "Enable HTTPS", gui.UseTLS).K("gui.useTLS"),
+		Bool("Start Browser", "Open browser when Syncthing starts", opts.StartBrowser).K("options.startBrowser"),
 		Sel("GUI Theme", "Web GUI theme",
-			[]string{"Default", "Light", "Dark", "Black"}, "Dark"), // gui.theme
+			[]string{"Default", "Light", "Dark", "Black"},
+			gui.Theme).Vals("default", "light", "dark", "black").K("gui.theme"),
 	)
 	connections := NewForm(settingsButtons,
-		Text("Sync Protocol Listen Addresses", "Comma separated", "default"),    // options.listenAddresses
-		Text("Incoming Rate Limit", "KiB/s, zero for no limit", "0"),            // options.maxRecvKbps
-		Text("Outgoing Rate Limit", "KiB/s, zero for no limit", "0"),            // options.maxSendKbps
-		Bool("Limit Bandwidth in LAN", "Rate limit LAN connections too", false), // options.limitBandwidthInLan
-		Bool("Enable NAT Traversal", "", true),                                  // options.natEnabled
-		Bool("Local Discovery", "", true),                                       // options.localAnnounceEnabled
-		Bool("Global Discovery", "", true),                                      // options.globalAnnounceEnabled
-		Bool("Enable Relaying", "Relay when direct connection fails", true),     // options.relaysEnabled
-		Text("Global Discovery Servers", "Comma separated", "default"),          // options.globalAnnounceServers
+		Text("Sync Protocol Listen Addresses", "Comma separated",
+			strings.Join(opts.ListenAddresses, ", ")).K("options.listenAddresses"),
+		Text("Incoming Rate Limit", "KiB/s, zero for no limit", fmt.Sprint(opts.MaxRecvKbps)).Num().K("options.maxRecvKbps"),
+		Text("Outgoing Rate Limit", "KiB/s, zero for no limit", fmt.Sprint(opts.MaxSendKbps)).Num().K("options.maxSendKbps"),
+		Bool("Limit Bandwidth in LAN", "Rate limit LAN connections too", opts.LimitBandwidthInLan).K("options.limitBandwidthInLan"),
+		Bool("Enable NAT Traversal", "", opts.NATEnabled).K("options.natEnabled"),
+		Bool("Local Discovery", "", opts.LocalAnnounceEnabled).K("options.localAnnounceEnabled"),
+		Bool("Global Discovery", "", opts.GlobalAnnounceEnabled).K("options.globalAnnounceEnabled"),
+		Bool("Enable Relaying", "Relay when direct connection fails", opts.RelaysEnabled).K("options.relaysEnabled"),
+		Text("Global Discovery Servers", "Comma separated",
+			strings.Join(opts.GlobalAnnounceServers, ", ")).K("options.globalAnnounceServers"),
 	)
-	return FormView{title: "Settings", sub: "this-machine",
+	v := FormView{title: "Settings", sub: selfName,
 		sections: []string{"General", "GUI", "Connections"},
-		forms:    []Form{general, gui, connections}}
+		forms:    []Form{general, guiForm, connections}}
+	if c == nil {
+		return v
+	}
+	oldPassword := gui.Password
+	v.save = func(vals map[string]any) error {
+		optsPatch, guiPatch := map[string]any{}, map[string]any{}
+		for k, val := range vals {
+			switch {
+			case k == "self.name" || k == "upgrades":
+				// handled below
+			case k == "options.minHomeDiskFree":
+				num, unit := 1.0, "%"
+				fmt.Sscanf(val.(string), "%f %s", &num, &unit)
+				optsPatch["minHomeDiskFree"] = map[string]any{"value": num, "unit": unit}
+			case k == "options.urAccepted":
+				n, _ := strconv.Atoi(val.(string))
+				optsPatch["urAccepted"] = n
+			case k == "options.listenAddresses" || k == "options.globalAnnounceServers":
+				optsPatch[strings.TrimPrefix(k, "options.")] = splitList(val.(string))
+			case strings.HasPrefix(k, "options."):
+				optsPatch[strings.TrimPrefix(k, "options.")] = val
+			case strings.HasPrefix(k, "gui."):
+				guiPatch[strings.TrimPrefix(k, "gui.")] = val
+			}
+		}
+		switch vals["upgrades"] {
+		case "none":
+			optsPatch["autoUpgradeIntervalH"] = 0
+		case "stable":
+			optsPatch["autoUpgradeIntervalH"], optsPatch["upgradeToPreReleases"] = 12, false
+		case "candidate":
+			optsPatch["autoUpgradeIntervalH"], optsPatch["upgradeToPreReleases"] = 12, true
+		}
+		if guiPatch["password"] == oldPassword {
+			delete(guiPatch, "password") // unchanged bcrypt hash: don't re-hash it
+		}
+		if err := c.PatchOptions(optsPatch); err != nil {
+			return err
+		}
+		if err := c.PatchGUI(guiPatch); err != nil {
+			return err
+		}
+		return c.PatchDevice(myID, map[string]any{"name": vals["self.name"]})
+	}
+	return v
 }

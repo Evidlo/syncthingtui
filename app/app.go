@@ -129,7 +129,7 @@ var presets = map[string]func() App{
 	"add-folder":      func() App { a := New(); a.sub = NewEditFolder("", true); return a },
 	"edit-device":     func() App { a := New(); a.sub = NewEditDevice("nas", false); return a },
 	"settings":        func() App { a := New(); a.sub = NewSettings(); return a },
-	"show-id":         func() App { a := New(); a.sub = NewShowID(); return a },
+	"show-id":         func() App { a := New(); a.sub = NewShowID(DeviceID); return a },
 	"about":           func() App { a := New(); a.sub = NewAbout("v2.0.13, Linux (64-bit)", AboutPaths); return a },
 }
 

@@ -41,10 +41,12 @@ Usage of syncthingtui:
 
 ## Running Tests
 
-    # read-only test against active syncthing instance
-    go run ./scripts/rocheck
-    # read/write test against temporary syncthing
-    ./scripts/test_live.sh
-    # render TUI views for checking correct layout
-    go run ./cmd/syncthingtui -list # list available TUI views
+    # run all tests: UI dispatch + layout width tests, plus full REST integration
+    # against a temporary syncthing instance in /tmp
+    go test ./...
+
+    # pieces, individually:
+    ./scripts/test_live.sh      # the REST integration suite on its own
+    go run ./scripts/rocheck    # read-only check against your real instance
+    go run ./cmd/syncthingtui -list                            # list TUI views
     go run ./cmd/syncthingtui -screen main-folders -size 80x30 # render a view

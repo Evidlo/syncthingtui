@@ -23,6 +23,7 @@ type dataMsg struct {
 	alerts            []Alert
 	stats             [][2]string
 	stVersion         string
+	myID              string
 	paths             [][2]string
 	inTotal, outTotal int64
 	err               error
@@ -146,11 +147,15 @@ func fetch(c *client.Client) dataMsg {
 			name = id[:7]
 		}
 		alerts = append(alerts, Alert{
-			Kind: "device", Title: "New Device", Short: name, ID: id,
+			Kind: "device", Title: "New Device", Short: name, ID: id, Addr: p.Address,
 			Time:    p.Time.Local().Format("2006-01-02 15:04:05"),
 			Body:    fmt.Sprintf("Device %q (%s at %s) wants to connect. Add new device?", p.Name, id, p.Address),
 			Buttons: []string{"Add Device", "Ignore", "Dismiss"},
 		})
+	}
+	knownFolder := map[string]bool{}
+	for _, f := range cfg.Folders {
+		knownFolder[f.ID] = true
 	}
 	pendFold, _ := c.PendingFolders()
 	for id, p := range pendFold {
@@ -159,11 +164,16 @@ func fetch(c *client.Client) dataMsg {
 			if label == "" {
 				label = id
 			}
+			// like the web GUI: known folder → share it; unknown → add it
+			title, question, accept := "New Folder", "Add new folder?", "Add"
+			if knownFolder[id] {
+				title, question, accept = "Share Folder", "Share this folder?", "Share"
+			}
 			alerts = append(alerts, Alert{
-				Kind: "folder", Title: "Share Folder", Short: label, ID: id, DeviceID: devID,
+				Kind: "folder", Title: title, Short: label, ID: id, DeviceID: devID,
 				Time:    offer.Time.Local().Format("2006-01-02 15:04:05"),
-				Body:    fmt.Sprintf("%s wants to share folder %q (%s). Share this folder?", names[devID], label, id),
-				Buttons: []string{"Share", "Ignore", "Dismiss"},
+				Body:    fmt.Sprintf("%s wants to share folder %q (%s). %s", names[devID], label, id, question),
+				Buttons: []string{accept, "Ignore", "Dismiss"},
 			})
 		}
 	}
@@ -222,6 +232,7 @@ func fetch(c *client.Client) dataMsg {
 
 	return dataMsg{folders: folders, devices: devices, alerts: alerts, stats: stats,
 		stVersion: fmt.Sprintf("%s, %s (%s)", version.Version, version.OS, version.Arch),
+		myID:      status.MyID,
 		paths:     paths,
 		inTotal:   conns.Total.InBytesTotal, outTotal: conns.Total.OutBytesTotal}
 }
