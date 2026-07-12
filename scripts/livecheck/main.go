@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/evanw/syncthingtui/client"
+	"github.com/evidlo/syncthingtui/client"
 )
 
 func check(name string, err error) {

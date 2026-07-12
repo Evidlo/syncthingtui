@@ -8,7 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/evanw/syncthingtui/client"
+	"github.com/evidlo/syncthingtui/client"
 )
 
 // Live data: when a client is set, the App polls syncthing every pollInterval

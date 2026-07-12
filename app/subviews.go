@@ -8,7 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/evanw/syncthingtui/client"
+	"github.com/evidlo/syncthingtui/client"
 )
 
 // FormView is the generic subview: infobar chrome, boxed sub-tabs, one Form

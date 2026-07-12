@@ -4,7 +4,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/evanw/syncthingtui/client"
+	"github.com/evidlo/syncthingtui/client"
 )
 
 func main() {

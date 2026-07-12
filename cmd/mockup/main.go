@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/evanw/syncthingtui/mockups"
+	"github.com/evidlo/syncthingtui/mockups"
 )
 
 func main() {

@@ -1,4 +1,4 @@
-module github.com/evanw/syncthingtui
+module github.com/evidlo/syncthingtui
 
 go 1.25.5
 

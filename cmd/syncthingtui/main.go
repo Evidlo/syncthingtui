@@ -14,8 +14,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/evanw/syncthingtui/app"
-	"github.com/evanw/syncthingtui/client"
+	"github.com/evidlo/syncthingtui/app"
+	"github.com/evidlo/syncthingtui/client"
 )
 
 func main() {

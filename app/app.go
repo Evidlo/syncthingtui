@@ -7,7 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/evanw/syncthingtui/client"
+	"github.com/evidlo/syncthingtui/client"
 )
 
 // closeMsg asks the root App to pop the current subview.
