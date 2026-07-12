@@ -7,7 +7,37 @@ Render any screen statically: `go run ./cmd/mockup <name> [WxH]` (default 80x60,
 Screens: `mockups/screens.go`, fake data: `mockups/data.go`. Keep all screens ≤80 cols.
 
 Feedback protocol: present mockup sets with exact commands, pause for user feedback between sets.
-Sets 1-7 done. Stage 3 built, pending user walkthrough:
+Stage 4 in progress. Done: client/ package (REST subset + config.xml Discover);
+app live mode (App polls every 3s → dataMsg; rates from byte-total deltas;
+MainModel.action() runs against client or fake fallback). Wired: pause/resume
+folder+device, rescan one/all, alert Dismiss, live folders/devices/stats/alerts.
+CLI: syncthingtui [-fake | -address X -api-key Y] (default: Discover from
+~/.local/state|.config/syncthing/config.xml; honors gui tls attr → https,
+cert verification skipped — syncthing GUI certs are self-signed/expired,
+API key is the auth). scripts/rocheck = read-only GET check vs real instance. Integration smoke test:
+`./scripts/test_live.sh` — throwaway syncthing home in /tmp, random port, runs
+scripts/livecheck (all endpoints + pause round-trip). Local syncthing is
+v1.18 (old single-dash CLI; script handles both).
+
+Notices: all system errors (/rest/system/error) combine into ONE "Notice"
+alert (REST can only clear all at once; per-error clear impossible), OK =
+/rest/system/error/clear. livecheck covers post-error→visible→clear→empty.
+About view: Actions > About — syncthingtui version (app.TUIVersion) +
+syncthing build info on top, paths below (/rest/system/paths; 404 on <v1.19,
+shown as unavailable). Tests so far: scripts/test_live.sh + livecheck
+(integration smoke vs throwaway instance), static width checks; no go tests
+yet (stage-4 item 5). GUI.yaml synced with current app 2026-07-12 (TUI
+notes on main-view buttons; Restore Versions modal documented, TUI TODO).
+
+Remaining stage-4 work:
+1. Form Save → POST/PATCH /rest/config (folders/devices/options); Remove → DELETE
+2. Alert Add Device/Share Folder/Ignore (accept pending: PUT config with new device/folder; ignore lists)
+3. /rest/events long-poll instead of 3s polling
+4. Actions tab: Show ID uses real ID+QR, restart/shutdown/logs endpoints
+5. Proper Go integration tests (port scripts/livecheck into go test with harness)
+6. Restore Versions view (per-folder Versions button; see GUI.yaml) — design + wire
+
+Stage-3 walkthrough approved by user 2026-07-12. Stage-3 app details:
 - Interactive app: `go run ./cmd/syncthingtui` (q quits, altscreen)
 - Static review: `go run ./cmd/syncthingtui -screen <name> [-size WxH]`, `-list` for names
 - `app/` package: App router (app.go) → MainModel tabs (main_view.go) → subviews
@@ -27,6 +57,11 @@ Keep rejected mockup variants in the registry (user request) — don't delete af
 (none currently)
 
 ## Decisions
+
+- Upstream parity: no tooling (deemed brittle). Form fields in app/subviews.go
+  carry trailing comments naming their /rest/config keys; AGENTS.md holds the
+  last-synced syncthing version + the parity-check procedure. Original project
+  brief lives in PROMPT.md (user renamed it from AGENTS.md).
 
 - Alerts TUI analog: fifth tab, badge when non-empty — gray count, space: "Alerts (2)"
 - Stack: Go + bubbletea (bubblon for nesting)

@@ -88,11 +88,22 @@ func (v ShowIDView) View() string {
 		keyHint("←→", "select", "enter", "confirm", "esc", "back"), right, v.width, v.height)
 }
 
-// ── About / Paths ────────────────────────────────────────────────────────────
+// ── About ────────────────────────────────────────────────────────────────────
 
-type AboutView struct{ width, height int }
+// TUIVersion is this program's version, shown at the top of About.
+const TUIVersion = "0.1.0-dev"
 
-func NewAbout() AboutView { return AboutView{} }
+type AboutView struct {
+	stVersion     string
+	paths         [][2]string
+	width, height int
+}
+
+// NewAbout shows version info (syncthingtui + syncthing build) and paths.
+// Authors/Included Software from the web GUI are intentionally left out.
+func NewAbout(stVersion string, paths [][2]string) AboutView {
+	return AboutView{stVersion: stVersion, paths: paths}
+}
 
 func (v AboutView) Init() tea.Cmd { return nil }
 
@@ -104,11 +115,21 @@ func (v AboutView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (v AboutView) View() string {
+	kw := 0
+	for _, kv := range v.paths {
+		kw = max(kw, len(kv[0]))
+	}
 	var b strings.Builder
 	b.WriteString("\n")
-	for _, kv := range AboutPaths {
-		b.WriteString("  " + dimStyle.Render(fmt.Sprintf("%-29s", kv[0])) + kv[1] + "\n")
+	b.WriteString("  " + boldSt.Render("syncthingtui") + "  " + TUIVersion + "\n")
+	b.WriteString("  " + boldSt.Render("syncthing") + "     " + v.stVersion + "\n\n")
+	b.WriteString("  " + dimStyle.Render("Paths") + "\n")
+	if len(v.paths) == 0 {
+		b.WriteString("  " + dimStyle.Render("(not available on this syncthing version)") + "\n")
 	}
-	return page(infobarTop("About", "Paths", v.width), b.String(),
+	for _, kv := range v.paths {
+		b.WriteString("  " + dimStyle.Render(fmt.Sprintf("%-*s ", kw, kv[0])) + kv[1] + "\n")
+	}
+	return page(infobarTop("About", "syncthingtui", v.width), b.String(),
 		keyHint("esc", "back"), netRates, v.width, v.height)
 }

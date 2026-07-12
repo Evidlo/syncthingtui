@@ -3,8 +3,11 @@ package app
 import (
 	"fmt"
 	"sort"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/evanw/syncthingtui/client"
 )
 
 // closeMsg asks the root App to pop the current subview.
@@ -12,14 +15,28 @@ type closeMsg struct{ flash string }
 
 // App routes between the main tabbed view and one subview at a time.
 type App struct {
-	main          MainModel
-	sub           tea.Model
-	width, height int
+	main            MainModel
+	sub             tea.Model
+	width, height   int
+	client          *client.Client
+	prevIn, prevOut int64
+	prevAt          time.Time
 }
 
-func New() App { return App{main: NewMain()} }
+// New builds a fake-data app (used by static screen presets).
+func New() App { return App{main: NewMain(nil)} }
 
-func (a App) Init() tea.Cmd { return a.main.Init() }
+// NewLive builds an app backed by a syncthing instance.
+func NewLive(c *client.Client) App {
+	return App{main: NewMain(c), client: c}
+}
+
+func (a App) Init() tea.Cmd {
+	if a.client != nil {
+		return tea.Batch(a.main.Init(), fetchCmd(a.client))
+	}
+	return a.main.Init()
+}
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -40,6 +57,25 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.sub = nil
 		a.main.flash = msg.flash
 		return a, nil
+	case dataMsg:
+		if msg.err != nil {
+			a.main.flash = "syncthing: " + msg.err.Error()
+			return a, pollCmd()
+		}
+		now := time.Now()
+		if !a.prevAt.IsZero() {
+			dt := now.Sub(a.prevAt).Seconds()
+			down := humanRate(float64(msg.inTotal-a.prevIn) / dt)
+			up := humanRate(float64(msg.outTotal-a.prevOut) / dt)
+			a.main.rates = "↓" + down + " ↑" + up
+			msg.stats[0][1] = fmt.Sprintf("%s (%s total)", down, humanBytes(msg.inTotal))
+			msg.stats[1][1] = fmt.Sprintf("%s (%s total)", up, humanBytes(msg.outTotal))
+		}
+		a.prevIn, a.prevOut, a.prevAt = msg.inTotal, msg.outTotal, now
+		a.main.setData(msg)
+		return a, pollCmd()
+	case pollTickMsg:
+		return a, fetchCmd(a.client)
 	case tea.KeyMsg:
 		if a.sub != nil {
 			switch msg.String() {
@@ -91,7 +127,7 @@ var presets = map[string]func() App{
 	"edit-device":     func() App { a := New(); a.sub = NewEditDevice("nas", false); return a },
 	"settings":        func() App { a := New(); a.sub = NewSettings(); return a },
 	"show-id":         func() App { a := New(); a.sub = NewShowID(); return a },
-	"about":           func() App { a := New(); a.sub = NewAbout(); return a },
+	"about":           func() App { a := New(); a.sub = NewAbout("v2.0.13, Linux (64-bit)", AboutPaths); return a },
 }
 
 func ScreenNames() []string {

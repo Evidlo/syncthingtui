@@ -6,6 +6,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/evanw/syncthingtui/client"
 )
 
 // openMsg asks the root App to push a subview.
@@ -35,14 +37,53 @@ type MainModel struct {
 	folders       []Folder
 	devices       []Device
 	alerts        []Alert
+	stats         [][2]string
+	stVersion     string
+	paths         [][2]string
+	rates         string
 	flash         string
+	client        *client.Client // nil = fake mode
 }
 
-func NewMain() MainModel {
-	return MainModel{
-		folders: append([]Folder{}, Folders...),
-		devices: append([]Device{}, Devices...),
-		alerts:  append([]Alert{}, Alerts...),
+func NewMain(c *client.Client) MainModel {
+	m := MainModel{client: c, rates: netRates, stats: ThisDeviceStats}
+	if c == nil {
+		m.folders = append([]Folder{}, Folders...)
+		m.devices = append([]Device{}, Devices...)
+		m.alerts = append([]Alert{}, Alerts...)
+	} else {
+		m.rates = ""
+		m.stats = [][2]string{{"Status", "connecting to syncthing..."}}
+	}
+	if c == nil {
+		m.stVersion = "v2.0.13, Linux (64-bit)"
+		m.paths = AboutPaths
+	}
+	return m
+}
+
+// setData applies a live snapshot, keeping cursors in range.
+func (m *MainModel) setData(d dataMsg) {
+	m.folders, m.devices, m.alerts, m.stats = d.folders, d.devices, d.alerts, d.stats
+	m.stVersion, m.paths = d.stVersion, d.paths
+	m.folderIdx = clamp(m.folderIdx, 0, len(m.folders)+1)
+	m.deviceIdx = clamp(m.deviceIdx, 0, len(m.devices)+1)
+	m.alertIdx = clamp(m.alertIdx, 0, max(0, len(m.alerts)-1))
+}
+
+// action runs fn against syncthing and refreshes; in fake mode it runs
+// fallback locally instead.
+func (m *MainModel) action(fn func(c *client.Client) error, fallback func()) tea.Cmd {
+	if m.client == nil {
+		fallback()
+		return nil
+	}
+	c := m.client
+	return func() tea.Msg {
+		if err := fn(c); err != nil {
+			return dataMsg{err: err}
+		}
+		return fetch(c)
 	}
 }
 
@@ -116,16 +157,27 @@ func (m MainModel) updateFolders(key string) (tea.Model, tea.Cmd) {
 		case len(m.folders):
 			return m, open(NewEditFolder("", true))
 		case len(m.folders) + 1:
-			m.flash = "rescanned all folders (mockup)"
+			m.flash = "rescanning all folders"
+			return m, m.action(
+				func(c *client.Client) error { return c.Rescan("") },
+				func() {})
 		default:
 			f := &m.folders[m.folderIdx]
+			id := f.ID
 			switch m.folderButtons()[m.folderBtn] {
 			case "Pause":
-				f.State = "Paused"
+				return m, m.action(
+					func(c *client.Client) error { return c.SetFolderPaused(id, true) },
+					func() { f.State = "Paused" })
 			case "Resume":
-				f.State = "Up to Date"
+				return m, m.action(
+					func(c *client.Client) error { return c.SetFolderPaused(id, false) },
+					func() { f.State = "Up to Date" })
 			case "Rescan":
-				m.flash = "rescanned " + f.Label + " (mockup)"
+				m.flash = "rescanning " + f.Label
+				return m, m.action(
+					func(c *client.Client) error { return c.Rescan(id) },
+					func() {})
 			case "Edit":
 				return m, open(NewEditFolder(f.Label, false))
 			}
@@ -160,11 +212,16 @@ func (m MainModel) updateDevices(key string) (tea.Model, tea.Cmd) {
 			m.flash = "recent changes: not in mockup scope"
 		default:
 			d := &m.devices[m.deviceIdx]
+			id := d.ID
 			switch m.deviceButtons()[m.deviceBtn] {
 			case "Pause":
-				d.State = "Paused"
+				return m, m.action(
+					func(c *client.Client) error { return c.SetDevicePaused(id, true) },
+					func() { d.State = "Paused" })
 			case "Resume":
-				d.State = "Up to Date"
+				return m, m.action(
+					func(c *client.Client) error { return c.SetDevicePaused(id, false) },
+					func() { d.State = "Up to Date" })
 			case "Edit":
 				return m, open(NewEditDevice(d.Name, false))
 			}
@@ -188,11 +245,28 @@ func (m MainModel) updateAlerts(key string) (tea.Model, tea.Cmd) {
 	case "right", "l":
 		m.alertBtn = clamp(m.alertBtn+1, 0, len(sel.Buttons)-1)
 	case "enter":
-		m.flash = fmt.Sprintf("%s: %s (mockup)", sel.Short, sel.Buttons[m.alertBtn])
+		button := sel.Buttons[m.alertBtn]
+		m.flash = fmt.Sprintf("%s: %s", sel.Title, button)
 		m.alerts = append(m.alerts[:m.alertIdx], m.alerts[m.alertIdx+1:]...)
 		m.alertIdx, m.alertBtn = clamp(m.alertIdx, 0, max(0, len(m.alerts)-1)), 0
-		if sel.Kind == "device" && strings.HasPrefix(m.flash, sel.Short+": Add") {
+		switch button {
+		case "OK": // clears the whole system error list, like the web GUI
+			return m, m.action(
+				func(c *client.Client) error { return c.ClearErrors() },
+				func() {})
+		case "Dismiss":
+			return m, m.action(
+				func(c *client.Client) error {
+					if sel.Kind == "device" {
+						return c.DismissPendingDevice(sel.ID)
+					}
+					return c.DismissPendingFolder(sel.ID)
+				},
+				func() {})
+		case "Add Device":
 			return m, open(NewEditDevice(sel.Short, true))
+		default:
+			m.flash += ": not wired yet (stage 4 TODO)" // Ignore, Share, Add folder
 		}
 	}
 	return m, nil
@@ -210,8 +284,8 @@ func (m MainModel) updateActions(key string) (tea.Model, tea.Cmd) {
 			return m, open(NewSettings())
 		case "Show ID":
 			return m, open(NewShowID())
-		case "Advanced": // stand-in: About/Paths lives here in the mockup
-			return m, open(NewAbout())
+		case "About":
+			return m, open(NewAbout(m.stVersion, m.paths))
 		default:
 			m.flash = ActionItems[m.actionIdx] + ": not in mockup scope"
 		}
@@ -238,7 +312,7 @@ func (m MainModel) View() string {
 		body = m.viewActions()
 		keys = keyHint("↑↓", "select", "enter", "open", "tab/⇧tab", "switch tabs", "esc", "quit")
 	}
-	right := netRates
+	right := m.rates
 	if m.flash != "" {
 		right = warnSt.Render(m.flash)
 	}
@@ -314,11 +388,8 @@ func (m MainModel) viewDevices() string {
 		detail = boldSt.Render(d.Name) + "\n\n" +
 			fmt.Sprintf("State            %s\n", stateStyle(d.State).Render(d.State)) +
 			fmt.Sprintf("Address          %s\n", d.Address) +
-			fmt.Sprintf("Download Rate    %s\n", d.Download) +
-			fmt.Sprintf("Upload Rate      %s\n", d.Upload) +
-			"Compression      Metadata Only\n" +
-			"Last Seen        2026-07-12 10:41\n" +
-			"Folders          Documents, Photos, Music\n\n" +
+			fmt.Sprintf("Compression      %s\n", d.Compression) +
+			fmt.Sprintf("Last Seen        %s\n", d.LastSeen) + "\n" +
 			progressBar(d.Pct, m.width-leftW-8) + fmt.Sprintf(" %d%%\n\n", d.Pct) +
 			buttonRow(m.deviceButtons(), m.deviceBtn)
 	}
@@ -328,7 +399,7 @@ func (m MainModel) viewDevices() string {
 func (m MainModel) viewThisDevice() string {
 	var b strings.Builder
 	b.WriteString("\n")
-	for _, kv := range ThisDeviceStats {
+	for _, kv := range m.stats {
 		b.WriteString(fmt.Sprintf("  %s %s\n", dimStyle.Render(fmt.Sprintf("%-21s", kv[0])), kv[1]))
 	}
 	return b.String()
@@ -339,9 +410,13 @@ func (m MainModel) viewAlerts() string {
 		return "\n  " + dimStyle.Render("No pending alerts.")
 	}
 	var list strings.Builder
-	kinds := map[string]string{"device": "Device", "folder": "Folder"}
+	kinds := map[string]string{"device": "Device", "folder": "Folder", "notice": "Notice"}
 	for i, a := range m.alerts {
-		list.WriteString(listRow(i == m.alertIdx, warnSt.Render("⚠"), kinds[a.Kind]+" ("+a.Short+")"))
+		label := kinds[a.Kind]
+		if a.Short != "" {
+			label += " (" + a.Short + ")"
+		}
+		list.WriteString(listRow(i == m.alertIdx, warnSt.Render("⚠"), label))
 	}
 	sel := m.alerts[m.alertIdx]
 	detail := warnSt.Bold(true).Render("⚠ "+sel.Title) + "\n" +

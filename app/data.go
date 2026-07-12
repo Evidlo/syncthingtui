@@ -10,13 +10,15 @@ type Folder struct {
 }
 
 type Device struct {
-	Name, State, Address string
-	Pct                  int
-	Download, Upload     string
+	ID, Name, State, Address string
+	Pct                      int
+	Download, Upload         string
+	Compression, LastSeen    string
 }
 
 type Alert struct {
 	Kind, Title, Short, Time, Body string
+	ID, DeviceID                   string // pending device/folder IDs (live mode)
 	Buttons                        []string
 }
 
@@ -28,18 +30,21 @@ var Folders = []Folder{
 }
 
 var Devices = []Device{
-	{"nas", "Up to Date", "10.0.0.2:22000", 100, "1.2 MiB/s", "340 KiB/s"},
-	{"laptop", "Syncing (72%)", "10.0.0.5:22000", 72, "0 B/s", "2.1 MiB/s"},
-	{"phone", "Disconnected", "", 100, "", ""},
+	{"", "nas", "Up to Date", "10.0.0.2:22000", 100, "1.2 MiB/s", "340 KiB/s", "Metadata Only", "2026-07-12 10:41"},
+	{"", "laptop", "Syncing (72%)", "10.0.0.5:22000", 72, "0 B/s", "2.1 MiB/s", "Metadata Only", "2026-07-12 10:39"},
+	{"", "phone", "Disconnected", "", 100, "", "", "All Data", "2026-07-10 08:12"},
 }
 
 var Alerts = []Alert{
 	{"device", "New Device", "workpc", "2026-07-12 09:14",
 		`Device "workpc" (MFZWI3D-BONSGYC-... at 10.0.0.9:22000) wants to connect. Add new device?`,
-		[]string{"Add Device", "Ignore", "Dismiss"}},
+		"", "", []string{"Add Device", "Ignore", "Dismiss"}},
 	{"folder", "Share Folder", "Books", "2026-07-12 09:20",
 		`laptop wants to share folder "Books" (ij9kl-mn0op). Share this folder?`,
-		[]string{"Share", "Ignore", "Dismiss"}},
+		"", "", []string{"Share", "Ignore", "Dismiss"}},
+	{"notice", "Notice", "", "2026-07-12 10:02",
+		`Error on folder "Default Folder" (default): insufficient space on disk for database (~/.config/syncthing/index-v0.14.0.db): 0.2 % < 1 %`,
+		"", "", []string{"OK"}},
 }
 
 var ThisDeviceStats = [][2]string{
@@ -53,7 +58,7 @@ var ThisDeviceStats = [][2]string{
 	{"Version", "v2.0.13, Linux (64-bit)"},
 }
 
-var ActionItems = []string{"Settings", "Advanced", "Show ID", "Logs", "Support Bundle", "Log Out", "Restart", "Shut Down"}
+var ActionItems = []string{"Settings", "Advanced", "Show ID", "Logs", "Support Bundle", "About", "Log Out", "Restart", "Shut Down"}
 
 var AboutPaths = [][2]string{
 	{"User Home", "/home/evan"},

@@ -77,34 +77,37 @@ func NewEditFolder(label string, isNew bool) FormView {
 	if isNew {
 		title, sub, id = "Add Folder", "new", "(generated)"
 	}
+	// Trailing comments name the syncthing config key each field maps to
+	// (folder object in /rest/config/folders) — the upstream-parity anchor.
 	general := NewForm(subviewButtons,
-		Text("Folder Label", "Optional label, can differ per device", label),
-		RO("Folder ID", "Same on all cluster devices", id),
-		Text("Folder Path", "Created if it does not exist", "~/"+label),
+		Text("Folder Label", "Optional label, can differ per device", label), // label
+		RO("Folder ID", "Same on all cluster devices", id),                   // id
+		Text("Folder Path", "Created if it does not exist", "~/"+label),      // path
 	)
 	vers := NewForm(subviewButtons,
 		Sel("File Versioning", "How to handle old versions",
 			[]string{"No File Versioning", "Trash Can File Versioning", "Simple File Versioning", "Staggered File Versioning", "External File Versioning"},
-			"Simple File Versioning"),
-		Text("Keep Versions", "Old versions to keep per file", "5"),
-		Text("Cleanup Interval", "Seconds between cleanup runs, zero disables", "3600"),
+			"Simple File Versioning"), // versioning.type
+		Text("Keep Versions", "Old versions to keep per file", "5"),                     // versioning.params.keep
+		Text("Cleanup Interval", "Seconds between cleanup runs, zero disables", "3600"), // versioning.cleanupIntervalS
 	)
 	shareFields := make([]FormField, len(Devices))
 	for i, d := range Devices {
-		shareFields[i] = Bool(d.Name, "Share this folder with "+d.Name, d.Name == "nas")
+		shareFields[i] = Bool(d.Name, "Share this folder with "+d.Name, d.Name == "nas") // devices[]
 	}
 	sharing := NewForm(subviewButtons, shareFields...)
 	ignores := NewForm(subviewButtons,
+		// not in config: GET/POST /rest/db/ignores?folder=ID
 		Area("Ignore Patterns", "One pattern per line", "// One pattern per line\n*.tmp\n(?d).DS_Store"),
 	)
 	advanced := NewForm(subviewButtons,
-		Bool("Watch for Changes", "Use filesystem notifications", true),
-		Text("Full Rescan Interval", "Seconds between full rescans", "3600"),
+		Bool("Watch for Changes", "Use filesystem notifications", true),      // fsWatcherEnabled
+		Text("Full Rescan Interval", "Seconds between full rescans", "3600"), // rescanIntervalS
 		Sel("Folder Type", "How this folder syncs",
-			[]string{"Send & Receive", "Send Only", "Receive Only", "Receive Encrypted"}, "Send & Receive"),
+			[]string{"Send & Receive", "Send Only", "Receive Only", "Receive Encrypted"}, "Send & Receive"), // type
 		Sel("File Pull Order", "Order in which to download files",
-			[]string{"Random", "Alphabetic", "Smallest First", "Largest First", "Oldest First", "Newest First"}, "Random"),
-		Bool("Ignore Permissions", "Disable syncing file permissions", false),
+			[]string{"Random", "Alphabetic", "Smallest First", "Largest First", "Oldest First", "Newest First"}, "Random"), // order
+		Bool("Ignore Permissions", "Disable syncing file permissions", false), // ignorePerms
 	)
 	return FormView{title: title, sub: sub,
 		sections: []string{"General", "Sharing", "Versioning", "Ignore Patterns", "Advanced"},
@@ -122,22 +125,23 @@ func NewEditDevice(name string, isNew bool) FormView {
 	} else {
 		idField = RO("Device ID", "Find it under Actions > Show ID on the other device", "MFZWI3D-BONSGYC-...")
 	}
+	// config keys: device object in /rest/config/devices
 	general := NewForm(subviewButtons,
-		idField,
-		Text("Device Name", "Shown instead of the ID; advertised to other devices", name),
+		idField, // deviceID
+		Text("Device Name", "Shown instead of the ID; advertised to other devices", name), // name
 	)
 	sharing := NewForm(subviewButtons,
-		Bool("Introducer", "Add devices from the introducer to our list", false),
-		Bool("Auto Accept", "Auto create/share advertised folders", true),
+		Bool("Introducer", "Add devices from the introducer to our list", false), // introducer
+		Bool("Auto Accept", "Auto create/share advertised folders", true),        // autoAcceptFolders
 	)
 	advanced := NewForm(subviewButtons,
-		Text("Addresses", `Comma separated or "dynamic"`, "dynamic"),
+		Text("Addresses", `Comma separated or "dynamic"`, "dynamic"), // addresses
 		Sel("Compression", "What data to compress",
-			[]string{"All Data", "Metadata Only", "Off"}, "Metadata Only"),
-		Text("Number of Connections", "Zero lets Syncthing decide", "0"),
-		Text("Incoming Rate Limit", "KiB/s, zero for no limit", "0"),
-		Text("Outgoing Rate Limit", "KiB/s, zero for no limit", "0"),
-		Bool("Untrusted", "Require password-protected folders", false),
+			[]string{"All Data", "Metadata Only", "Off"}, "Metadata Only"), // compression
+		Text("Number of Connections", "Zero lets Syncthing decide", "0"), // numConnections
+		Text("Incoming Rate Limit", "KiB/s, zero for no limit", "0"),     // maxRecvKbps
+		Text("Outgoing Rate Limit", "KiB/s, zero for no limit", "0"),     // maxSendKbps
+		Bool("Untrusted", "Require password-protected folders", false),   // untrusted
 	)
 	return FormView{title: title, sub: sub,
 		sections: []string{"General", "Sharing", "Advanced"},
@@ -146,34 +150,35 @@ func NewEditDevice(name string, isNew bool) FormView {
 
 func NewSettings() FormView {
 	settingsButtons := []string{"Save", "Close"}
+	// config keys: options/gui objects in /rest/config (except self device name)
 	general := NewForm(settingsButtons,
-		Text("Device Name", "Shown to other devices", "this-machine"),
-		Text("Minimum Free Disk Space", "On the home (database) disk", "1 %"),
-		RO("API Key", "Key for API access", "abcDEF123..."),
+		Text("Device Name", "Shown to other devices", "this-machine"),         // devices[self].name
+		Text("Minimum Free Disk Space", "On the home (database) disk", "1 %"), // options.minHomeDiskFree
+		RO("API Key", "Key for API access", "abcDEF123..."),                   // gui.apiKey
 		Sel("Anonymous Usage Reporting", "Send anonymous usage statistics",
-			[]string{"Version 3", "Version 2", "Undecided", "Disabled"}, "Disabled"),
+			[]string{"Version 3", "Version 2", "Undecided", "Disabled"}, "Disabled"), // options.urAccepted
 		Sel("Automatic Upgrades", "Upgrade policy",
-			[]string{"No Upgrades", "Stable Releases Only", "Stable Releases and Release Candidates"}, "Stable Releases Only"),
+			[]string{"No Upgrades", "Stable Releases Only", "Stable Releases and Release Candidates"}, "Stable Releases Only"), // options.autoUpgradeIntervalH + upgradeToPreReleases
 	)
 	gui := NewForm(settingsButtons,
-		Text("GUI Listen Address", "Non-privileged port 1024-65535", "127.0.0.1:8384"),
-		Text("GUI Authentication User", "Username for GUI access", "evan"),
-		Pass("GUI Authentication Password", "Password for GUI access", "hunter2"),
-		Bool("Use HTTPS for GUI", "Enable HTTPS", true),
-		Bool("Start Browser", "Open browser when Syncthing starts", false),
+		Text("GUI Listen Address", "Non-privileged port 1024-65535", "127.0.0.1:8384"), // gui.address
+		Text("GUI Authentication User", "Username for GUI access", "evan"),             // gui.user
+		Pass("GUI Authentication Password", "Password for GUI access", "hunter2"),      // gui.password
+		Bool("Use HTTPS for GUI", "Enable HTTPS", true),                                // gui.useTLS
+		Bool("Start Browser", "Open browser when Syncthing starts", false),             // options.startBrowser
 		Sel("GUI Theme", "Web GUI theme",
-			[]string{"Default", "Light", "Dark", "Black"}, "Dark"),
+			[]string{"Default", "Light", "Dark", "Black"}, "Dark"), // gui.theme
 	)
 	connections := NewForm(settingsButtons,
-		Text("Sync Protocol Listen Addresses", "Comma separated", "default"),
-		Text("Incoming Rate Limit", "KiB/s, zero for no limit", "0"),
-		Text("Outgoing Rate Limit", "KiB/s, zero for no limit", "0"),
-		Bool("Limit Bandwidth in LAN", "Rate limit LAN connections too", false),
-		Bool("Enable NAT Traversal", "", true),
-		Bool("Local Discovery", "", true),
-		Bool("Global Discovery", "", true),
-		Bool("Enable Relaying", "Relay when direct connection fails", true),
-		Text("Global Discovery Servers", "Comma separated", "default"),
+		Text("Sync Protocol Listen Addresses", "Comma separated", "default"),    // options.listenAddresses
+		Text("Incoming Rate Limit", "KiB/s, zero for no limit", "0"),            // options.maxRecvKbps
+		Text("Outgoing Rate Limit", "KiB/s, zero for no limit", "0"),            // options.maxSendKbps
+		Bool("Limit Bandwidth in LAN", "Rate limit LAN connections too", false), // options.limitBandwidthInLan
+		Bool("Enable NAT Traversal", "", true),                                  // options.natEnabled
+		Bool("Local Discovery", "", true),                                       // options.localAnnounceEnabled
+		Bool("Global Discovery", "", true),                                      // options.globalAnnounceEnabled
+		Bool("Enable Relaying", "Relay when direct connection fails", true),     // options.relaysEnabled
+		Text("Global Discovery Servers", "Comma separated", "default"),          // options.globalAnnounceServers
 	)
 	return FormView{title: "Settings", sub: "this-machine",
 		sections: []string{"General", "GUI", "Connections"},

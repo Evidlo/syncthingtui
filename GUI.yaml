@@ -7,11 +7,15 @@ views:
     tabs:
       - name: Folders
         # List of synced folders with status indicators
+        # TUI: split pane — folder list left, detail pane right
         interactiveList:
           itemType: folder
           # Each folder item shows: label/id, status, path, sync percentage
         # Per-folder buttons shown when folder is expanded
+        # TUI order: [Edit, Pause|Resume, Rescan]; Versions button not yet designed (TODO)
         itemButtons: [Pause, Resume, Versions, Rescan, Edit]
+        # TUI: Rescan All + Add Folder are list items below the folders;
+        # Pause All / Resume All dropped from the TUI
         buttons: [Pause All, Resume All, Rescan All, Add Folder]
 
       - name: This Device
@@ -28,11 +32,15 @@ views:
 
       - name: Remote Devices
         # List of connected/disconnected remote devices
+        # TUI: split pane, same design as Folders
         interactiveList:
           itemType: device
           # Each device item shows: name, status, sync percentage, connection type
         # Per-device buttons shown when device is expanded
+        # TUI order: [Edit, Pause|Resume]
         itemButtons: [Pause, Resume, Edit]
+        # TUI: Recent Changes + Add Device are list items below the devices;
+        # Pause All / Resume All dropped from the TUI
         buttons: [Pause All, Resume All, Recent Changes, Add Remote Device]
 
       - name: Actions
@@ -43,6 +51,7 @@ views:
           - Show ID
           - Logs
           - Support Bundle
+          - About  # opens About view (syncthingtui + syncthing versions, paths)
           - Log Out
           - Restart
           - Shut Down
@@ -341,6 +350,9 @@ views:
 
   - name: About
     # Information about Syncthing
+    # TUI: single view opened from Actions > About — syncthingtui version and
+    # syncthing build info (version, OS, arch) at the top, then Paths below
+    # (live from /rest/system/paths)
     tabs:
       - name: Authors
         # do not implement
@@ -370,6 +382,17 @@ views:
   - name: Logs
     # do not implement
     # Log viewer with filtering
+
+  - name: Restore Versions
+    # Modal opened by the per-folder Versions button (folders with versioning).
+    # TUI analog not yet designed (TODO).
+    # REST: GET /rest/folder/versions?folder=X, POST to restore
+    elements:
+      - Tree of files with archived versions, expandable per directory
+      - Filter by name, filter by date range
+      - Per-file version selector (choose which version to restore)
+      - Mass actions: select all / select none
+    buttons: [Restore, Close]
 
 # Alerts appear as a stack of dismissable warning panels at the top of the main
 # view in the web GUI, above the folder list. Each panel has a title, body text,
@@ -416,6 +439,9 @@ alerts:
 
   - name: Notice
     # Shown when /rest/system/error returns errors; lists timestamped error messages
+    # TUI: all system errors combine into ONE "Notice" entry in the Alerts tab
+    # (the REST API can only clear all errors at once); OK clears the list
+    # (POST /rest/system/error/clear)
     body: List of error messages with timestamps
     buttons: [OK]  # clears the error list
 

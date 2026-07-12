@@ -1,0 +1,304 @@
+// Package client is a minimal syncthing REST API client covering the
+// endpoints the TUI needs.
+package client
+
+import (
+	"bytes"
+	"crypto/tls"
+	"encoding/json"
+	"encoding/xml"
+	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+type Client struct {
+	base string
+	key  string
+	http *http.Client
+}
+
+// New accepts "host:port" (http) or a full "http(s)://host:port" base URL.
+// Certificate verification is skipped: syncthing's GUI cert is self-signed
+// (and often expired); the API key is the effective authentication.
+func New(address, apiKey string) *Client {
+	if !strings.Contains(address, "://") {
+		address = "http://" + address
+	}
+	return &Client{
+		base: address,
+		key:  apiKey,
+		http: &http.Client{
+			Timeout: 10 * time.Second,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+		},
+	}
+}
+
+func (c *Client) do(method, path string, body, into any) error {
+	var buf bytes.Buffer
+	if body != nil {
+		if err := json.NewEncoder(&buf).Encode(body); err != nil {
+			return err
+		}
+	}
+	req, err := http.NewRequest(method, c.base+path, &buf)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-API-Key", c.key)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("%s %s: %s", method, path, resp.Status)
+	}
+	if into != nil {
+		return json.NewDecoder(resp.Body).Decode(into)
+	}
+	return nil
+}
+
+func (c *Client) get(path string, into any) error { return c.do("GET", path, nil, into) }
+
+// ── Types (subset of the syncthing REST schema) ──────────────────────────────
+
+type FolderCfg struct {
+	ID      string `json:"id"`
+	Label   string `json:"label"`
+	Path    string `json:"path"`
+	Paused  bool   `json:"paused"`
+	Devices []struct {
+		DeviceID string `json:"deviceID"`
+	} `json:"devices"`
+}
+
+type DeviceCfg struct {
+	DeviceID    string   `json:"deviceID"`
+	Name        string   `json:"name"`
+	Addresses   []string `json:"addresses"`
+	Paused      bool     `json:"paused"`
+	Compression string   `json:"compression"`
+	Introducer  bool     `json:"introducer"`
+}
+
+type Config struct {
+	Folders []FolderCfg `json:"folders"`
+	Devices []DeviceCfg `json:"devices"`
+}
+
+type ServiceStatus struct {
+	Error *string `json:"error"`
+}
+
+type SystemStatus struct {
+	MyID                    string                   `json:"myID"`
+	Uptime                  int64                    `json:"uptime"`
+	DiscoveryStatus         map[string]ServiceStatus `json:"discoveryStatus"`
+	ConnectionServiceStatus map[string]ServiceStatus `json:"connectionServiceStatus"`
+}
+
+type Connections struct {
+	Total struct {
+		InBytesTotal  int64 `json:"inBytesTotal"`
+		OutBytesTotal int64 `json:"outBytesTotal"`
+	} `json:"total"`
+	Connections map[string]struct {
+		Connected bool   `json:"connected"`
+		Address   string `json:"address"`
+	} `json:"connections"`
+}
+
+type DBStatus struct {
+	State       string `json:"state"`
+	GlobalBytes int64  `json:"globalBytes"`
+	LocalBytes  int64  `json:"localBytes"`
+	NeedBytes   int64  `json:"needBytes"`
+	LocalFiles  int64  `json:"localFiles"`
+}
+
+type Version struct {
+	Version string `json:"version"`
+	OS      string `json:"os"`
+	Arch    string `json:"arch"`
+}
+
+type PendingDevice struct {
+	Time    time.Time `json:"time"`
+	Name    string    `json:"name"`
+	Address string    `json:"address"`
+}
+
+type PendingFolderOffer struct {
+	Time  time.Time `json:"time"`
+	Label string    `json:"label"`
+}
+
+type PendingFolder struct {
+	OfferedBy map[string]PendingFolderOffer `json:"offeredBy"`
+}
+
+type DeviceStats struct {
+	LastSeen time.Time `json:"lastSeen"`
+}
+
+type SystemError struct {
+	When    time.Time `json:"when"`
+	Message string    `json:"message"`
+}
+
+type Completion struct {
+	Completion float64 `json:"completion"`
+}
+
+// ── Endpoints ────────────────────────────────────────────────────────────────
+
+func (c *Client) Config() (Config, error) {
+	var v Config
+	return v, c.get("/rest/config", &v)
+}
+
+func (c *Client) SystemStatus() (SystemStatus, error) {
+	var v SystemStatus
+	return v, c.get("/rest/system/status", &v)
+}
+
+func (c *Client) Connections() (Connections, error) {
+	var v Connections
+	return v, c.get("/rest/system/connections", &v)
+}
+
+func (c *Client) DBStatus(folder string) (DBStatus, error) {
+	var v DBStatus
+	return v, c.get("/rest/db/status?folder="+folder, &v)
+}
+
+func (c *Client) Version() (Version, error) {
+	var v Version
+	return v, c.get("/rest/system/version", &v)
+}
+
+func (c *Client) PendingDevices() (map[string]PendingDevice, error) {
+	var v map[string]PendingDevice
+	return v, c.get("/rest/cluster/pending/devices", &v)
+}
+
+func (c *Client) PendingFolders() (map[string]PendingFolder, error) {
+	var v map[string]PendingFolder
+	return v, c.get("/rest/cluster/pending/folders", &v)
+}
+
+func (c *Client) DeviceStats() (map[string]DeviceStats, error) {
+	var v map[string]DeviceStats
+	return v, c.get("/rest/stats/device", &v)
+}
+
+func (c *Client) DeviceCompletion(deviceID string) (Completion, error) {
+	var v Completion
+	return v, c.get("/rest/db/completion?device="+deviceID, &v)
+}
+
+func (c *Client) Rescan(folder string) error {
+	path := "/rest/db/scan"
+	if folder != "" {
+		path += "?folder=" + folder
+	}
+	return c.do("POST", path, nil, nil)
+}
+
+func (c *Client) SetFolderPaused(id string, paused bool) error {
+	return c.do("PATCH", "/rest/config/folders/"+id, map[string]bool{"paused": paused}, nil)
+}
+
+func (c *Client) SetDevicePaused(id string, paused bool) error {
+	return c.do("PATCH", "/rest/config/devices/"+id, map[string]bool{"paused": paused}, nil)
+}
+
+func (c *Client) Errors() ([]SystemError, error) {
+	var v struct {
+		Errors []SystemError `json:"errors"`
+	}
+	return v.Errors, c.get("/rest/system/error", &v)
+}
+
+func (c *Client) ClearErrors() error {
+	return c.do("POST", "/rest/system/error/clear", nil, nil)
+}
+
+// PostError registers a system error (plain-text body; used by tests).
+func (c *Client) PostError(msg string) error {
+	req, err := http.NewRequest("POST", c.base+"/rest/system/error", strings.NewReader(msg))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-API-Key", c.key)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("POST /rest/system/error: %s", resp.Status)
+	}
+	return nil
+}
+
+// Paths returns the filesystem paths syncthing is using (config, db, ...).
+func (c *Client) Paths() (map[string]string, error) {
+	var v map[string]string
+	return v, c.get("/rest/system/paths", &v)
+}
+
+func (c *Client) DismissPendingDevice(id string) error {
+	return c.do("DELETE", "/rest/cluster/pending/devices?device="+id, nil, nil)
+}
+
+func (c *Client) DismissPendingFolder(id string) error {
+	return c.do("DELETE", "/rest/cluster/pending/folders?folder="+id, nil, nil)
+}
+
+// ── Local config discovery ───────────────────────────────────────────────────
+
+type guiConfig struct {
+	GUI struct {
+		TLS     bool   `xml:"tls,attr"`
+		Address string `xml:"address"`
+		APIKey  string `xml:"apikey"`
+	} `xml:"gui"`
+}
+
+// Discover reads address and API key from the local syncthing config.xml
+// (new ~/.local/state and legacy ~/.config locations).
+func Discover() (address, apiKey string, err error) {
+	home, _ := os.UserHomeDir()
+	paths := []string{
+		filepath.Join(home, ".local/state/syncthing/config.xml"),
+		filepath.Join(home, ".config/syncthing/config.xml"),
+	}
+	for _, p := range paths {
+		data, rerr := os.ReadFile(p)
+		if rerr != nil {
+			continue
+		}
+		var cfg guiConfig
+		if xerr := xml.Unmarshal(data, &cfg); xerr != nil {
+			continue
+		}
+		if cfg.GUI.APIKey != "" {
+			scheme := "http://"
+			if cfg.GUI.TLS {
+				scheme = "https://"
+			}
+			return scheme + cfg.GUI.Address, cfg.GUI.APIKey, nil
+		}
+	}
+	return "", "", fmt.Errorf("no syncthing config.xml with apikey found")
+}
