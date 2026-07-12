@@ -9,6 +9,7 @@ Note that this app was entirely vibe-engineered from `CHAT.txt`
 ## Install
 
     go install github.com/evidlo/syncthingtui/cmd/syncthingtui@latest
+    syncthingtui
 
 ## Usage
 
