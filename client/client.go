@@ -71,23 +71,42 @@ func (c *Client) get(path string, into any) error { return c.do("GET", path, nil
 
 // ── Types (subset of the syncthing REST schema) ──────────────────────────────
 
+type FolderDevice struct {
+	DeviceID string `json:"deviceID"`
+}
+
+type VersioningCfg struct {
+	Type             string            `json:"type"`
+	Params           map[string]string `json:"params"`
+	CleanupIntervalS int               `json:"cleanupIntervalS"`
+}
+
 type FolderCfg struct {
-	ID      string `json:"id"`
-	Label   string `json:"label"`
-	Path    string `json:"path"`
-	Paused  bool   `json:"paused"`
-	Devices []struct {
-		DeviceID string `json:"deviceID"`
-	} `json:"devices"`
+	ID               string         `json:"id"`
+	Label            string         `json:"label"`
+	Path             string         `json:"path"`
+	Type             string         `json:"type"`
+	Paused           bool           `json:"paused"`
+	Devices          []FolderDevice `json:"devices"`
+	Order            string         `json:"order"`
+	RescanIntervalS  int            `json:"rescanIntervalS"`
+	FSWatcherEnabled bool           `json:"fsWatcherEnabled"`
+	IgnorePerms      bool           `json:"ignorePerms"`
+	Versioning       VersioningCfg  `json:"versioning"`
 }
 
 type DeviceCfg struct {
-	DeviceID    string   `json:"deviceID"`
-	Name        string   `json:"name"`
-	Addresses   []string `json:"addresses"`
-	Paused      bool     `json:"paused"`
-	Compression string   `json:"compression"`
-	Introducer  bool     `json:"introducer"`
+	DeviceID          string   `json:"deviceID"`
+	Name              string   `json:"name"`
+	Addresses         []string `json:"addresses"`
+	Paused            bool     `json:"paused"`
+	Compression       string   `json:"compression"`
+	Introducer        bool     `json:"introducer"`
+	AutoAcceptFolders bool     `json:"autoAcceptFolders"`
+	NumConnections    int      `json:"numConnections"`
+	MaxRecvKbps       int      `json:"maxRecvKbps"`
+	MaxSendKbps       int      `json:"maxSendKbps"`
+	Untrusted         bool     `json:"untrusted"`
 }
 
 type Config struct {
@@ -212,6 +231,56 @@ func (c *Client) Rescan(folder string) error {
 		path += "?folder=" + folder
 	}
 	return c.do("POST", path, nil, nil)
+}
+
+func (c *Client) FolderByID(id string) (FolderCfg, error) {
+	var v FolderCfg
+	return v, c.get("/rest/config/folders/"+id, &v)
+}
+
+func (c *Client) DeviceByID(id string) (DeviceCfg, error) {
+	var v DeviceCfg
+	return v, c.get("/rest/config/devices/"+id, &v)
+}
+
+// PostFolder adds a folder (or replaces one with the same ID); accepts a
+// FolderCfg or a map following the folder config schema.
+func (c *Client) PostFolder(f any) error {
+	return c.do("POST", "/rest/config/folders", f, nil)
+}
+
+// PatchFolder applies a partial update; keys follow the folder config schema.
+func (c *Client) PatchFolder(id string, patch map[string]any) error {
+	return c.do("PATCH", "/rest/config/folders/"+id, patch, nil)
+}
+
+func (c *Client) DeleteFolder(id string) error {
+	return c.do("DELETE", "/rest/config/folders/"+id, nil, nil)
+}
+
+// PostDevice adds a device; accepts a DeviceCfg or a schema-shaped map.
+func (c *Client) PostDevice(d any) error {
+	return c.do("POST", "/rest/config/devices", d, nil)
+}
+
+func (c *Client) PatchDevice(id string, patch map[string]any) error {
+	return c.do("PATCH", "/rest/config/devices/"+id, patch, nil)
+}
+
+func (c *Client) DeleteDevice(id string) error {
+	return c.do("DELETE", "/rest/config/devices/"+id, nil, nil)
+}
+
+func (c *Client) Ignores(folder string) ([]string, error) {
+	var v struct {
+		Ignore []string `json:"ignore"`
+	}
+	return v.Ignore, c.get("/rest/db/ignores?folder="+folder, &v)
+}
+
+func (c *Client) SetIgnores(folder string, lines []string) error {
+	return c.do("POST", "/rest/db/ignores?folder="+folder,
+		map[string][]string{"ignore": lines}, nil)
 }
 
 func (c *Client) SetFolderPaused(id string, paused bool) error {

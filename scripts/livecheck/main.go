@@ -21,6 +21,7 @@ func check(name string, err error) {
 func main() {
 	address := flag.String("address", "127.0.0.1:8384", "")
 	apiKey := flag.String("api-key", "", "")
+	peerID := flag.String("peer-id", "", "valid device ID for add/remove tests")
 	flag.Parse()
 	c := client.New(*address, *apiKey)
 
@@ -84,5 +85,47 @@ func main() {
 		fmt.Println("ok   pause reflected in config")
 		check("PATCH folder paused=false", c.SetFolderPaused(id, false))
 	}
+	// Folder lifecycle: create, patch, ignores, delete.
+	tmp, _ := os.MkdirTemp("", "livecheck-folder")
+	defer os.RemoveAll(tmp)
+	check("POST /rest/config/folders", c.PostFolder(map[string]any{
+		"id": "lcheck-test1", "label": "livecheck", "path": tmp,
+	}))
+	check("PATCH /rest/config/folders/{id}", c.PatchFolder("lcheck-test1", map[string]any{"label": "livecheck2"}))
+	f, err := c.FolderByID("lcheck-test1")
+	check("GET /rest/config/folders/{id}", err)
+	if f.Label != "livecheck2" {
+		fmt.Println("FAIL folder patch not reflected")
+		os.Exit(1)
+	}
+	fmt.Println("ok   folder patch reflected")
+	check("POST /rest/db/ignores", c.SetIgnores("lcheck-test1", []string{"*.tmp"}))
+	ign, err := c.Ignores("lcheck-test1")
+	check("GET /rest/db/ignores", err)
+	if len(ign) != 1 || ign[0] != "*.tmp" {
+		fmt.Println("FAIL ignores round-trip")
+		os.Exit(1)
+	}
+	fmt.Println("ok   ignores round-trip")
+	check("DELETE /rest/config/folders/{id}", c.DeleteFolder("lcheck-test1"))
+
+	// Device lifecycle: add, patch, delete (needs a valid, check-digit-passing ID).
+	if *peerID == "" {
+		fmt.Println("skip device lifecycle (no -peer-id)")
+	} else {
+		check("POST /rest/config/devices", c.PostDevice(map[string]any{
+			"deviceID": *peerID, "name": "livecheck-dev",
+		}))
+		check("PATCH /rest/config/devices/{id}", c.PatchDevice(*peerID, map[string]any{"name": "livecheck-dev2"}))
+		d, err := c.DeviceByID(*peerID)
+		check("GET /rest/config/devices/{id}", err)
+		if d.Name != "livecheck-dev2" {
+			fmt.Println("FAIL device patch not reflected")
+			os.Exit(1)
+		}
+		fmt.Println("ok   device patch reflected")
+		check("DELETE /rest/config/devices/{id}", c.DeleteDevice(*peerID))
+	}
+
 	fmt.Println("ALL OK")
 }

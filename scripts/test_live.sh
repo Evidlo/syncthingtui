@@ -26,6 +26,12 @@ for i in $(seq 1 30); do
   sleep 0.5
 done
 
-echo "== syncthing up on :$PORT (home $DIR) =="
+# second identity provides a valid device ID for add/remove tests
+DIR2=$(mktemp -d /tmp/sttui-test2.XXXXXX)
+trap 'cleanup; rm -rf "$DIR2"' EXIT
+GEN2=$(syncthing generate --home="$DIR2" 2>&1 || syncthing -generate="$DIR2" 2>&1)
+PEER_ID=$(echo "$GEN2" | grep -o '[A-Z2-7]\{7\}\(-[A-Z2-7]\{7\}\)\{7\}' | head -1)
+
+echo "== syncthing up on :$PORT (home $DIR, peer $PEER_ID) =="
 cd "$(dirname "$0")/.."
-go run ./scripts/livecheck -address "127.0.0.1:$PORT" -api-key testkey123
+go run ./scripts/livecheck -address "127.0.0.1:$PORT" -api-key testkey123 -peer-id "$PEER_ID"

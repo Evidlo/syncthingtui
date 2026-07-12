@@ -29,9 +29,18 @@ shown as unavailable). Tests so far: scripts/test_live.sh + livecheck
 yet (stage-4 item 5). GUI.yaml synced with current app 2026-07-12 (TUI
 notes on main-view buttons; Restore Versions modal documented, TUI TODO).
 
+Form Save/Remove wired for folders + devices: editors load live config on open
+(openFolderEditor/openDeviceEditor cmds), fields carry functional config keys
+(FormField.K/.Vals/.Num — replaces comment-only annotations), Save PATCHes
+(or POSTs when new; folder ignores via /rest/db/ignores), Remove DELETEs,
+close triggers refetch. Alert "Add Device" now truly accepts the pending
+device (opens Add Device prefilled with its ID; Save POSTs it). livecheck
+covers folder+device lifecycle (create/patch/verify/delete; needs valid
+peer ID — test_live.sh generates a 2nd identity).
+
 Remaining stage-4 work:
-1. Form Save → POST/PATCH /rest/config (folders/devices/options); Remove → DELETE
-2. Alert Add Device/Share Folder/Ignore (accept pending: PUT config with new device/folder; ignore lists)
+1. Settings Save (options/gui PATCH; fiddly: minHomeDiskFree object, urAccepted ints, upgrade split key) + Settings load live values
+2. Alert Share Folder / Ignore actions (share = PATCH folder devices[]; ignore lists remoteIgnoredDevices / folder ignoredFolders)
 3. /rest/events long-poll instead of 3s polling
 4. Actions tab: Show ID uses real ID+QR, restart/shutdown/logs endpoints
 5. Proper Go integration tests (port scripts/livecheck into go test with harness)

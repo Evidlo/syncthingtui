@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textarea"
@@ -28,12 +29,33 @@ const (
 type FormField struct {
 	kind        fieldKind
 	label, desc string
+	key         string // config key for Save (empty = not saved)
 	value       string
+	numeric     bool
 	boolVal     bool
-	options     []string
+	options     []string // display strings
+	vals        []string // config values parallel to options (Sel only)
 	optIdx      int
 	input       textinput.Model
 	area        textarea.Model
+}
+
+// K sets the config key this field saves to.
+func (f FormField) K(key string) FormField { f.key = key; return f }
+
+// Num marks a text field as numeric (saved as int).
+func (f FormField) Num() FormField { f.numeric = true; return f }
+
+// Vals sets the config values corresponding to a select's display options and
+// re-resolves the initial selection against them (value holds the raw init).
+func (f FormField) Vals(vals ...string) FormField {
+	f.vals = vals
+	for i, v := range vals {
+		if v == f.value {
+			f.optIdx = i
+		}
+	}
+	return f
 }
 
 func Text(label, desc, value string) FormField {
@@ -45,6 +67,9 @@ func Pass(label, desc, value string) FormField {
 func RO(label, desc, value string) FormField {
 	return FormField{kind: ftRO, label: label, desc: desc, value: value}
 }
+
+// Sel builds a select; value may match an option (display string) or, after
+// .Vals(...), a config value.
 func Sel(label, desc string, options []string, value string) FormField {
 	idx := 0
 	for i, o := range options {
@@ -52,7 +77,7 @@ func Sel(label, desc string, options []string, value string) FormField {
 			idx = i
 		}
 	}
-	return FormField{kind: ftSelect, label: label, desc: desc, options: options, optIdx: idx}
+	return FormField{kind: ftSelect, label: label, desc: desc, options: options, optIdx: idx, value: value}
 }
 func Bool(label, desc string, value bool) FormField {
 	return FormField{kind: ftBool, label: label, desc: desc, boolVal: value}
@@ -102,6 +127,34 @@ func (f Form) OnButtons() bool { return f.cursor == len(f.fields) }
 
 // buttonMsg reports an activated form button ("Save", "Close", ...).
 type buttonMsg struct{ label string }
+
+// values collects the savable fields into config-key → value.
+func (f Form) values() map[string]any {
+	m := map[string]any{}
+	for _, fld := range f.fields {
+		if fld.key == "" || fld.kind == ftRO {
+			continue
+		}
+		switch fld.kind {
+		case ftBool:
+			m[fld.key] = fld.boolVal
+		case ftSelect:
+			if len(fld.vals) == len(fld.options) {
+				m[fld.key] = fld.vals[fld.optIdx]
+			} else {
+				m[fld.key] = fld.options[fld.optIdx]
+			}
+		default: // text, pass, area
+			if fld.numeric {
+				n, _ := strconv.Atoi(strings.TrimSpace(fld.value))
+				m[fld.key] = n
+			} else {
+				m[fld.key] = fld.value
+			}
+		}
+	}
+	return m
+}
 
 func (f Form) Update(msg tea.Msg) (Form, tea.Cmd) {
 	if ws, ok := msg.(tea.WindowSizeMsg); ok {

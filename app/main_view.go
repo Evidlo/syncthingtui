@@ -71,6 +71,62 @@ func (m *MainModel) setData(d dataMsg) {
 	m.alertIdx = clamp(m.alertIdx, 0, max(0, len(m.alerts)-1))
 }
 
+// openFolderEditor opens the folder editor, loading fresh config + ignores
+// from syncthing in live mode.
+func (m *MainModel) openFolderEditor(id, label string, isNew bool) tea.Cmd {
+	if m.client == nil {
+		return open(NewEditFolder(label, isNew))
+	}
+	c := m.client
+	return func() tea.Msg {
+		cfg, err := c.Config()
+		if err != nil {
+			return dataMsg{err: err}
+		}
+		status, err := c.SystemStatus()
+		if err != nil {
+			return dataMsg{err: err}
+		}
+		f := client.FolderCfg{Path: "~/", Type: "sendreceive", Order: "random",
+			RescanIntervalS: 3600, FSWatcherEnabled: true}
+		var ignores []string
+		if !isNew {
+			for _, fc := range cfg.Folders {
+				if fc.ID == id {
+					f = fc
+				}
+			}
+			ignores, _ = c.Ignores(id)
+		}
+		return openMsg{view: newEditFolder(c, f, cfg.Devices, status.MyID, ignores, isNew)}
+	}
+}
+
+// openDeviceEditor opens the device editor; prefill is used for new devices
+// (e.g. accepting a pending device with known ID/name).
+func (m *MainModel) openDeviceEditor(id string, prefill client.DeviceCfg, isNew bool) tea.Cmd {
+	if m.client == nil {
+		return open(NewEditDevice(prefill.Name, isNew))
+	}
+	c := m.client
+	return func() tea.Msg {
+		d := prefill
+		if d.Addresses == nil {
+			d.Addresses = []string{"dynamic"}
+		}
+		if d.Compression == "" {
+			d.Compression = "metadata"
+		}
+		if !isNew {
+			var err error
+			if d, err = c.DeviceByID(id); err != nil {
+				return dataMsg{err: err}
+			}
+		}
+		return openMsg{view: newEditDevice(c, d, isNew)}
+	}
+}
+
 // action runs fn against syncthing and refreshes; in fake mode it runs
 // fallback locally instead.
 func (m *MainModel) action(fn func(c *client.Client) error, fallback func()) tea.Cmd {
@@ -155,7 +211,7 @@ func (m MainModel) updateFolders(key string) (tea.Model, tea.Cmd) {
 	case "enter":
 		switch m.folderIdx {
 		case len(m.folders):
-			return m, open(NewEditFolder("", true))
+			return m, m.openFolderEditor("", "", true)
 		case len(m.folders) + 1:
 			m.flash = "rescanning all folders"
 			return m, m.action(
@@ -179,7 +235,7 @@ func (m MainModel) updateFolders(key string) (tea.Model, tea.Cmd) {
 					func(c *client.Client) error { return c.Rescan(id) },
 					func() {})
 			case "Edit":
-				return m, open(NewEditFolder(f.Label, false))
+				return m, m.openFolderEditor(f.ID, f.Label, false)
 			}
 		}
 	}
@@ -207,7 +263,7 @@ func (m MainModel) updateDevices(key string) (tea.Model, tea.Cmd) {
 	case "enter":
 		switch m.deviceIdx {
 		case len(m.devices):
-			return m, open(NewEditDevice("", true))
+			return m, m.openDeviceEditor("", client.DeviceCfg{}, true)
 		case len(m.devices) + 1:
 			m.flash = "recent changes: not in mockup scope"
 		default:
@@ -223,7 +279,7 @@ func (m MainModel) updateDevices(key string) (tea.Model, tea.Cmd) {
 					func(c *client.Client) error { return c.SetDevicePaused(id, false) },
 					func() { d.State = "Up to Date" })
 			case "Edit":
-				return m, open(NewEditDevice(d.Name, false))
+				return m, m.openDeviceEditor(id, client.DeviceCfg{}, false)
 			}
 		}
 	}
@@ -264,7 +320,7 @@ func (m MainModel) updateAlerts(key string) (tea.Model, tea.Cmd) {
 				},
 				func() {})
 		case "Add Device":
-			return m, open(NewEditDevice(sel.Short, true))
+			return m, m.openDeviceEditor("", client.DeviceCfg{DeviceID: sel.ID, Name: sel.Short}, true)
 		default:
 			m.flash += ": not wired yet (stage 4 TODO)" // Ignore, Share, Add folder
 		}

@@ -56,6 +56,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case closeMsg:
 		a.sub = nil
 		a.main.flash = msg.flash
+		if a.client != nil { // reflect any saved changes immediately
+			return a, fetchCmd(a.client)
+		}
 		return a, nil
 	case dataMsg:
 		if msg.err != nil {

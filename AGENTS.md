@@ -42,7 +42,7 @@ Parity spec: GUI.yaml contains hierarchal description of TUI elements (keep up t
 # Syncing with Upstream
 
 **Last synced against: syncthing v2.0.13** — update this line after each parity
-check. Procedure: (1) diff /rest/config keys against the trailing `// key`
-comments on form fields in app/subviews.go; (2) diff ../syncthing/gui/default/
+check. Procedure: (1) diff /rest/config keys against the `.K("key")` mappings
+on form fields in app/subviews.go (Settings still uses `// key` comments); (2) diff ../syncthing/gui/default/
 since the last-synced version, using GUI.yaml as the checklist; (3) update GUI.yaml,
 the TUI, and this line.
