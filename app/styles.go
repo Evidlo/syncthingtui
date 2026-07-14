@@ -34,8 +34,12 @@ var superscripts = []string{"¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸",
 
 // boxedTabs renders a tab row: boxed active tab, hidden borders otherwise,
 // dim superscript hotkeys.
-func boxedTabs(labels []string, active int) string {
-	inactive := lipgloss.NewStyle().Padding(0, 1).Border(lipgloss.HiddenBorder())
+func boxedTabs(labels []string, active int) string { return boxedTabsPad(labels, active, 1) }
+
+// boxedTabsPad is boxedTabs with configurable inactive-tab padding; pad 0
+// gives the compact row used when a Back button shares the line.
+func boxedTabsPad(labels []string, active, pad int) string {
+	inactive := lipgloss.NewStyle().Padding(0, pad).Border(lipgloss.HiddenBorder())
 	activeSt := lipgloss.NewStyle().Padding(0, 1).Border(lipgloss.NormalBorder()).BorderForeground(accent)
 	tabs := make([]string, len(labels))
 	for i, l := range labels {
@@ -74,6 +78,16 @@ func progressBar(pct, width int) string {
 	filled := pct * width / 100
 	return lipgloss.NewStyle().Foreground(accent).Render(strings.Repeat("█", filled)) +
 		dimStyle.Render(strings.Repeat("░", width-filled))
+}
+
+// tabsWithBack renders a sub-tab row with the boxed Back button (esc)
+// right-aligned on the same rows.
+func tabsWithBack(labels []string, active, width int) string {
+	tabs := boxedTabsPad(labels, active, 0)
+	back := lipgloss.NewStyle().Padding(0, 1).Border(lipgloss.NormalBorder()).
+		BorderForeground(accent).Render("Back" + dimStyle.Render("ᵉˢᶜ"))
+	gap := max(0, width-lipgloss.Width(tabs)-lipgloss.Width(back))
+	return lipgloss.JoinHorizontal(lipgloss.Bottom, tabs, strings.Repeat(" ", gap), back)
 }
 
 // infobarTop renders the subview header: bold title left, boxed Back button

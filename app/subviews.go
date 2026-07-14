@@ -103,10 +103,10 @@ func (v FormView) View() string {
 			keys = keyHint("ctrl+s", "commit", "esc", "cancel")
 		}
 	}
-	top, tabs := infobarTop(v.title, v.sub, v.width), boxedTabs(v.sections, v.active)
-	formH := v.height - lipgloss.Height(top) - lipgloss.Height(tabs) -
+	top := tabsWithBack(v.sections, v.active, v.width)
+	formH := v.height - lipgloss.Height(top) -
 		lipgloss.Height(statusBar(keys, netRates, v.width))
-	body := tabs + "\n" + lipgloss.NewStyle().PaddingLeft(2).Render(form.View(formH))
+	body := lipgloss.NewStyle().PaddingLeft(2).Render(form.View(formH))
 	return page(top, body, keys, netRates, v.width, v.height)
 }
 
