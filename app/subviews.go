@@ -24,6 +24,7 @@ type FormView struct {
 	forms         []Form
 	active        int
 	width, height int
+	rates         string
 	save          func(vals map[string]any) error
 	remove        func() error
 }
@@ -48,6 +49,9 @@ func (v FormView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for i := range v.forms {
 			v.forms[i], _ = v.forms[i].Update(msg)
 		}
+		return v, nil
+	case ratesMsg:
+		v.rates = string(msg)
 		return v, nil
 	case tea.KeyMsg:
 		if !v.forms[v.active].Editing() {
@@ -105,9 +109,9 @@ func (v FormView) View() string {
 	}
 	top := tabsWithBack(v.sections, v.active, v.width)
 	formH := v.height - lipgloss.Height(top) -
-		lipgloss.Height(statusBar(keys, netRates, v.width))
+		lipgloss.Height(statusBar(keys, v.rates, v.width))
 	body := lipgloss.NewStyle().PaddingLeft(2).Render(form.View(formH))
-	return page(top, body, keys, netRates, v.width, v.height)
+	return page(top, body, keys, v.rates, v.width, v.height)
 }
 
 // ── Edit Folder ──────────────────────────────────────────────────────────────
