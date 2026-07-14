@@ -289,7 +289,11 @@ func (f Form) View(height int) string {
 		label := fmt.Sprintf("%-*s", labelW, fld.label)
 		switch {
 		case fld.kind == ftRO:
-			write(cursor + dimStyle.Render(label+fld.value+"  (readonly)") + "\n")
+			labelSt := lipgloss.NewStyle()
+			if focused {
+				labelSt = boldSt
+			}
+			write(cursor + labelSt.Render(label) + dimStyle.Render(fld.value+"  (readonly)") + "\n")
 		case focused && f.editing && fld.kind == ftSelect:
 			write("  " + keyStyle.Render(label) + "\n")
 			for j, o := range fld.options {
@@ -305,17 +309,18 @@ func (f Form) View(height int) string {
 		case focused && f.editing:
 			write("  " + keyStyle.Render(label) + fld.input.View() + "\n")
 		default:
-			labelSt, valueSt := dimStyle, lipgloss.NewStyle()
+			labelSt, valueSt := lipgloss.NewStyle(), lipgloss.NewStyle()
 			if focused {
-				labelSt, valueSt = keyStyle, boldSt
+				labelSt, valueSt = boldSt, boldSt
 			}
 			write(cursor + labelSt.Render(label) + valueSt.Render(fld.display()) + "\n")
 		}
-		if focused && fld.desc != "" && !(f.editing && fld.kind == ftArea) {
-			write("  " + strings.Repeat(" ", labelW) + dimStyle.Render(fld.desc) + "\n")
-		}
-		write("\n")
+		// field descriptions disabled for now (re-enable later)
+		// if focused && fld.desc != "" && !(f.editing && fld.kind == ftArea) {
+		// 	write("  " + strings.Repeat(" ", labelW) + dimStyle.Render(fld.desc) + "\n")
+		// }
 	}
+	write("\n")
 	sel := -1
 	cursor := "  "
 	if f.cursor == len(f.fields) {
