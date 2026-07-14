@@ -265,10 +265,23 @@ func (f Form) updateEdit(msg tea.Msg) (Form, tea.Cmd) {
 
 const labelW = 32 // fits the longest label ("Sync Protocol Listen Addresses")
 
-func (f Form) View() string {
+// View renders the form scrolled so the focused field stays within height
+// rows (height <= 0 disables scrolling).
+func (f Form) View(height int) string {
 	var b strings.Builder
+	line, curLine := 0, 0 // rendered-line index of the focused field
+	write := func(s string) {
+		b.WriteString(s)
+		line += strings.Count(s, "\n")
+	}
 	for i, fld := range f.fields {
 		focused := i == f.cursor
+		if focused {
+			curLine = line
+			if f.editing && fld.kind == ftSelect {
+				curLine = line + 1 + fld.optIdx // follow the highlighted option
+			}
+		}
 		cursor := "  "
 		if focused && !f.editing {
 			cursor = keyStyle.Render("▸ ")
@@ -276,41 +289,38 @@ func (f Form) View() string {
 		label := fmt.Sprintf("%-*s", labelW, fld.label)
 		switch {
 		case fld.kind == ftRO:
-			b.WriteString(cursor + dimStyle.Render(label+fld.value+"  (readonly)") + "\n")
+			write(cursor + dimStyle.Render(label+fld.value+"  (readonly)") + "\n")
 		case focused && f.editing && fld.kind == ftSelect:
-			b.WriteString("  " + keyStyle.Render(label) + "\n")
+			write("  " + keyStyle.Render(label) + "\n")
 			for j, o := range fld.options {
 				marker, style := "    ", lipgloss.NewStyle()
 				if j == fld.optIdx {
 					marker, style = "  "+keyStyle.Render("▸ "), keyStyle
 				}
-				b.WriteString(marker + style.Render(o) + "\n")
+				write(marker + style.Render(o) + "\n")
 			}
 		case focused && f.editing && fld.kind == ftArea:
-			b.WriteString("  " + keyStyle.Render(fld.label) + "\n" +
+			write("  " + keyStyle.Render(fld.label) + "\n" +
 				lipgloss.NewStyle().PaddingLeft(2).Render(fld.area.View()) + "\n")
 		case focused && f.editing:
-			b.WriteString("  " + keyStyle.Render(label) + fld.input.View() + "\n")
+			write("  " + keyStyle.Render(label) + fld.input.View() + "\n")
 		default:
 			labelSt, valueSt := dimStyle, lipgloss.NewStyle()
 			if focused {
 				labelSt, valueSt = keyStyle, boldSt
 			}
-			b.WriteString(cursor + labelSt.Render(label) + valueSt.Render(fld.display()) + "\n")
+			write(cursor + labelSt.Render(label) + valueSt.Render(fld.display()) + "\n")
 		}
 		if focused && fld.desc != "" && !(f.editing && fld.kind == ftArea) {
-			b.WriteString("  " + strings.Repeat(" ", labelW) + dimStyle.Render(fld.desc) + "\n")
+			write("  " + strings.Repeat(" ", labelW) + dimStyle.Render(fld.desc) + "\n")
 		}
-		b.WriteString("\n")
+		write("\n")
 	}
 	sel := -1
-	if f.cursor == len(f.fields) {
-		sel = f.btn
-	}
 	cursor := "  "
 	if f.cursor == len(f.fields) {
-		cursor = keyStyle.Render("▸ ")
+		sel, cursor, curLine = f.btn, keyStyle.Render("▸ "), line
 	}
-	b.WriteString(cursor + buttonRow(f.buttons, sel) + "\n")
-	return b.String()
+	write(cursor + buttonRow(f.buttons, sel) + "\n")
+	return scrollToCursor(b.String(), curLine, height)
 }

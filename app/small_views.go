@@ -50,10 +50,13 @@ func qrBlock(text string) string {
 	if err != nil {
 		return ""
 	}
-	grid := q.Bitmap() // includes quiet-zone border
+	grid := q.Bitmap() // includes a 4-module quiet-zone border
+	// keep 2 of the 4 border modules: 1 half-block row of margin
+	const trim = 2
+	grid = grid[trim : len(grid)-trim]
 	var b strings.Builder
 	for y := 0; y < len(grid); y += 2 {
-		for x := range grid[y] {
+		for x := trim; x < len(grid[y])-trim; x++ {
 			top, bot := grid[y][x], y+1 < len(grid) && grid[y+1][x]
 			b.WriteString(map[[2]bool]string{
 				{true, true}: "█", {true, false}: "▀",
@@ -71,11 +74,11 @@ func (v ShowIDView) View() string {
 		id = DeviceID // defensive: myID not fetched yet
 	}
 	idBox := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(accent).
-		Padding(1, 3).Bold(true).Render(id[:31] + "\n" + id[32:])
+		Padding(0, 2).Bold(true).Render(id)
 	body := lipgloss.Place(v.width, max(1, v.height-5), lipgloss.Center, lipgloss.Center,
 		lipgloss.JoinVertical(lipgloss.Center,
-			"Share this ID with other devices to connect.", "", idBox, "",
-			qrBlock(id), "",
+			"Share this ID with other devices to connect.", "", idBox,
+			qrBlock(id), // its own trimmed quiet zone = 1 line of margin
 			buttonRow([]string{"Copy", "Close"}, v.btn)))
 	right := netRates
 	if v.flash != "" {

@@ -75,6 +75,14 @@ TODO: revisit form-field styling later — user dislikes current ▕value▏ pip
 Form elements must visually distinguish editable vs readonly fields (web GUI greys out non-editable); mockups grey out readonly fields entirely (formField readonly flag).
 Keep rejected mockup variants in the registry (user request) — don't delete after a decision.
 
+Tall-menu scrolling (2026-07-13): forms + split-pane lists taller than the
+window used to hard-clip (bottom items unreachable). scrollToCursor
+(styles.go) keeps the focused line centered, dim ⋮ marks clipped edges;
+Form.View now takes a height, FormView computes it from its chrome.
+Considered huh again (v2, 2026-03) — still no browse mode/readonly/reuse;
+staying hand-rolled. Detail panes (right side) still unscrolled.
+Tests: app/scroll_test.go.
+
 ## Open questions for user
 
 (none currently)

@@ -87,6 +87,27 @@ func infobarTop(title, sub string, width int) string {
 	return lipgloss.JoinHorizontal(lipgloss.Bottom, left, strings.Repeat(" ", gap), back)
 }
 
+// scrollToCursor clips body to height rows when it is taller, scrolled so the
+// cursor line sits near the center; dim ⋮ markers replace the edge rows where
+// content continues off-screen. Stateless: the offset is derived from the
+// cursor alone, so the cursor never lands on a marker row (it only reaches an
+// edge when that side is fully scrolled and the marker is absent).
+func scrollToCursor(body string, cursorLine, height int) string {
+	lines := strings.Split(strings.TrimRight(body, "\n"), "\n")
+	if height <= 0 || len(lines) <= height {
+		return body
+	}
+	off := clamp(cursorLine-(height-1)/2, 0, len(lines)-height)
+	out := append([]string{}, lines[off:off+height]...)
+	if off > 0 {
+		out[0] = dimStyle.Render("  ⋮")
+	}
+	if off+height < len(lines) {
+		out[height-1] = dimStyle.Render("  ⋮")
+	}
+	return strings.Join(out, "\n")
+}
+
 // page pads/clips body between a top row and status bar to fill the window.
 func page(top, body, keys, netRates string, width, height int) string {
 	bottom := statusBar(keys, netRates, width)
