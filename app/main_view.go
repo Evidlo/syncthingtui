@@ -17,9 +17,9 @@ func open(v tea.Model) tea.Cmd { return func() tea.Msg { return openMsg{v} } }
 
 const (
 	tabFolders = iota
-	tabThisDevice
 	tabDevices
 	tabAlerts
+	tabThisDevice
 	tabActions
 )
 
@@ -153,7 +153,7 @@ func (m MainModel) tabNames() []string {
 	if n := len(m.alerts); n > 0 {
 		alerts += dimStyle.Render(fmt.Sprintf(" (%d)", n))
 	}
-	return []string{"Folders", "This Device", "Remote Devices", alerts, "Actions"}
+	return []string{"Folders", "Remote Devices", alerts, "This Device", "Actions"}
 }
 
 func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
