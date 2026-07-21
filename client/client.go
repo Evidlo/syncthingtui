@@ -137,11 +137,14 @@ type Connections struct {
 }
 
 type DBStatus struct {
-	State       string `json:"state"`
-	GlobalBytes int64  `json:"globalBytes"`
-	LocalBytes  int64  `json:"localBytes"`
-	NeedBytes   int64  `json:"needBytes"`
-	LocalFiles  int64  `json:"localFiles"`
+	State                 string `json:"state"`
+	GlobalBytes           int64  `json:"globalBytes"`
+	LocalBytes            int64  `json:"localBytes"`
+	NeedBytes             int64  `json:"needBytes"`
+	NeedTotalItems        int64  `json:"needTotalItems"`
+	ReceiveOnlyTotalItems int64  `json:"receiveOnlyTotalItems"`
+	PullErrors            int64  `json:"pullErrors"`
+	LocalFiles            int64  `json:"localFiles"`
 }
 
 type SizeCfg struct {

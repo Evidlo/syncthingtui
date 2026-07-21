@@ -7,30 +7,47 @@ import (
 )
 
 var (
-	accent   = lipgloss.Color("4")
-	dim      = lipgloss.Color("8")
-	good     = lipgloss.Color("2")
-	warn     = lipgloss.Color("3")
-	bad      = lipgloss.Color("1")
+	accent   = lipgloss.Color("4") // bootstrap "primary"
+	dim      = lipgloss.Color("8") // bootstrap "default" (muted)
+	good     = lipgloss.Color("2") // bootstrap "success"
+	warn     = lipgloss.Color("3") // bootstrap "warning"
+	bad      = lipgloss.Color("1") // bootstrap "danger"
+	info     = lipgloss.Color("6") // bootstrap "info"
 	dimStyle = lipgloss.NewStyle().Foreground(dim)
 	keyStyle = lipgloss.NewStyle().Foreground(accent).Bold(true)
 	boldSt   = lipgloss.NewStyle().Bold(true)
 	warnSt   = lipgloss.NewStyle().Foreground(warn)
 )
 
+// stateStyle colors a status dot to match the web GUI's folderClass/deviceClass
+// (bootstrap color → our palette). See folderState (live.go) for the labels.
 func stateStyle(state string) lipgloss.Style {
 	switch {
-	case state == "Up to Date":
+	// success (green): folder idle / local additions; device up-to-date or
+	// connected-but-unused (a live connection is still green)
+	case state == "Up to Date", state == "Local Additions",
+		strings.HasPrefix(state, "Connected"):
 		return lipgloss.NewStyle().Foreground(good)
-	case strings.HasPrefix(state, "Connected"):
-		// connected but idle/unused is still a live connection → green
-		return lipgloss.NewStyle().Foreground(good)
-	case strings.HasPrefix(state, "Syncing"):
+	// primary (blue): busy
+	case strings.HasPrefix(state, "Syncing"), state == "Preparing to Sync",
+		state == "Scanning", state == "Cleaning Versions":
 		return lipgloss.NewStyle().Foreground(accent)
-	case state == "Out of Sync":
+	// danger (red)
+	case state == "Stopped", state == "Error", state == "Out of Sync",
+		state == "Failed Items", state == "Local Data Unencrypted":
 		return lipgloss.NewStyle().Foreground(bad)
+	// warning (yellow): unshared + the waiting states
+	case state == "Unshared", state == "Waiting to Sync",
+		state == "Waiting to Scan", state == "Waiting to Clean":
+		return warnSt
+	// default (muted): paused
+	case strings.HasPrefix(state, "Paused"):
+		return dimStyle
+	// info (cyan): unknown + every disconnected variant
+	case state == "Unknown", strings.HasPrefix(state, "Disconnected"):
+		return lipgloss.NewStyle().Foreground(info)
 	}
-	return dimStyle
+	return lipgloss.NewStyle().Foreground(info)
 }
 
 var superscripts = []string{"¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"}

@@ -247,7 +247,8 @@ func (m MainModel) updateFolders(key string) (tea.Model, tea.Cmd) {
 
 func (m *MainModel) deviceButtons() []string {
 	pause := "Pause"
-	if m.deviceIdx < len(m.devices) && m.devices[m.deviceIdx].State == "Paused" {
+	// device paused states carry a "(Unused)" suffix, so match by prefix
+	if m.deviceIdx < len(m.devices) && strings.HasPrefix(m.devices[m.deviceIdx].State, "Paused") {
 		pause = "Resume"
 	}
 	return []string{"Edit", pause}
