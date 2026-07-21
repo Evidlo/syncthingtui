@@ -48,22 +48,57 @@ func humanRate(bytesPerSec float64) string {
 	return humanBytes(int64(bytesPerSec)) + "/s"
 }
 
+// lastSeenValid reports whether a device has ever actually been seen.
+// syncthing reports the 1970 epoch (not Go's zero time) for never-seen devices.
+func lastSeenValid(t time.Time) bool {
+	return !t.IsZero() && t.Year() > 1971
+}
+
+// folderState mirrors the web GUI's folderStatus(): a "busy" db.State maps
+// straight to a label; an idle folder is refined (out of sync / failed items /
+// local additions / unshared / up to date) in the GUI's precedence order.
 func folderState(cfg client.FolderCfg, db client.DBStatus) (string, int) {
 	pct := 100
 	if db.GlobalBytes > 0 {
 		pct = int(100 * (db.GlobalBytes - db.NeedBytes) / db.GlobalBytes)
 	}
-	switch {
-	case cfg.Paused:
+	if cfg.Paused {
 		return "Paused", pct
-	case db.State == "syncing", db.State == "sync-preparing":
-		return "Syncing", pct
-	case db.State == "scanning":
+	}
+	if db.State == "" {
+		return "Unknown", pct
+	}
+	switch db.State {
+	case "error":
+		return "Stopped", pct
+	case "scanning":
 		return "Scanning", pct
-	case db.State == "error", db.State == "stopped":
-		return "Error", pct
-	case db.NeedBytes > 0:
+	case "syncing":
+		return "Syncing", pct
+	case "sync-preparing":
+		return "Preparing to Sync", pct
+	case "cleaning":
+		return "Cleaning Versions", pct
+	case "sync-waiting":
+		return "Waiting to Sync", pct
+	case "scan-waiting":
+		return "Waiting to Scan", pct
+	case "clean-waiting":
+		return "Waiting to Clean", pct
+	}
+	// db.State == "idle"
+	switch {
+	case db.NeedTotalItems > 0:
 		return "Out of Sync", pct
+	case db.PullErrors > 0:
+		return "Failed Items", pct
+	case db.ReceiveOnlyTotalItems > 0:
+		if cfg.Type == "receiveonly" {
+			return "Local Additions", pct
+		}
+		return "Local Data Unencrypted", pct
+	case len(cfg.Devices) <= 1:
+		return "Unshared", pct
 	}
 	return "Up to Date", pct
 }
@@ -111,26 +146,50 @@ func fetch(c *client.Client) dataMsg {
 		localFiles += db.LocalFiles
 	}
 
+	// A device is "unused" when it shares no folders with us; the web GUI
+	// labels such devices "(Unused)" instead of showing sync progress.
+	shares := map[string]bool{}
+	for _, f := range cfg.Folders {
+		for _, fd := range f.Devices {
+			shares[fd.DeviceID] = true
+		}
+	}
+
 	var devices []Device
 	for _, d := range cfg.Devices {
 		if d.DeviceID == status.MyID {
 			continue
 		}
-		conn := conns.Connections[d.DeviceID]
-		state, pct := "Disconnected", 100
+		conn, known := conns.Connections[d.DeviceID]
+		ds, hasStats := devStats[d.DeviceID]
+		unused := !shares[d.DeviceID]
+		suffix := ""
+		if unused {
+			suffix = " (Unused)"
+		}
+		state, pct := "Disconnected"+suffix, 100
 		switch {
+		case !known:
+			// no connection record yet (e.g. just after startup)
+			state = "Unknown"
 		case d.Paused:
-			state = "Paused"
+			state = "Paused" + suffix
+		case conn.Connected && unused:
+			state = "Connected (Unused)"
 		case conn.Connected:
 			comp, err := c.DeviceCompletion(d.DeviceID)
-			if err == nil && comp.Completion < 100 {
-				state, pct = fmt.Sprintf("Syncing (%.0f%%)", comp.Completion), int(comp.Completion)
-			} else {
+			if err == nil && comp.Completion >= 100 {
 				state = "Up to Date"
+			} else {
+				state, pct = fmt.Sprintf("Syncing (%.0f%%)", comp.Completion), int(comp.Completion)
 			}
+		case !unused && hasStats && lastSeenValid(ds.LastSeen) &&
+			time.Since(ds.LastSeen) >= 7*24*time.Hour:
+			// shared device unseen for a week → the GUI's "inactive" state
+			state = "Disconnected (Inactive)"
 		}
 		lastSeen := "-"
-		if ds, ok := devStats[d.DeviceID]; ok && !ds.LastSeen.IsZero() {
+		if hasStats && lastSeenValid(ds.LastSeen) {
 			lastSeen = ds.LastSeen.Local().Format("2006-01-02 15:04")
 		}
 		devices = append(devices, Device{

@@ -11,12 +11,61 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/evidlo/syncthingtui/app"
 	"github.com/evidlo/syncthingtui/client"
 )
+
+// minSyncthing is the oldest syncthing the TUI supports: the
+// /rest/cluster/pending/{devices,folders} endpoints behind the Alerts tab
+// landed in v1.18.0; older instances 404 there and Alerts is silently blank.
+var minSyncthing = [3]int{1, 18, 0}
+
+// parseVersion extracts major.minor.patch from a syncthing version string such
+// as "v1.12.1-ds1". Returns ok=false when it can't be parsed.
+func parseVersion(s string) ([3]int, bool) {
+	s = strings.TrimPrefix(strings.TrimSpace(s), "v")
+	if i := strings.IndexAny(s, "-+ "); i >= 0 {
+		s = s[:i]
+	}
+	parts := strings.Split(s, ".")
+	if len(parts) < 2 {
+		return [3]int{}, false
+	}
+	var v [3]int
+	for i := 0; i < 3 && i < len(parts); i++ {
+		n, err := strconv.Atoi(parts[i])
+		if err != nil {
+			return [3]int{}, false
+		}
+		v[i] = n
+	}
+	return v, true
+}
+
+// checkVersion fails when the connected syncthing is older than minSyncthing.
+// An unreadable or unparseable version is not treated as fatal.
+func checkVersion(c *client.Client) error {
+	ver, err := c.Version()
+	if err != nil {
+		return fmt.Errorf("cannot read syncthing version: %w", err)
+	}
+	v, ok := parseVersion(ver.Version)
+	if !ok {
+		return nil
+	}
+	if v[0] < minSyncthing[0] ||
+		(v[0] == minSyncthing[0] && (v[1] < minSyncthing[1] ||
+			(v[1] == minSyncthing[1] && v[2] < minSyncthing[2]))) {
+		return fmt.Errorf("syncthing %s is too old; syncthingtui needs v%d.%d.%d or newer",
+			ver.Version, minSyncthing[0], minSyncthing[1], minSyncthing[2])
+	}
+	return nil
+}
 
 func main() {
 	screen := flag.String("screen", "", "render a named screen statically and exit")
@@ -60,7 +109,12 @@ func main() {
 				key = dKey
 			}
 		}
-		a = app.NewLive(client.New(addr, key))
+		c := client.New(addr, key)
+		if err := checkVersion(c); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		a = app.NewLive(c)
 	}
 	if _, err := tea.NewProgram(a, tea.WithAltScreen()).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
