@@ -111,16 +111,28 @@ func fetch(c *client.Client) dataMsg {
 		localFiles += db.LocalFiles
 	}
 
+	// A device is "unused" when it shares no folders with us; the web GUI
+	// labels such devices "(Unused)" instead of showing sync progress.
+	shares := map[string]bool{}
+	for _, f := range cfg.Folders {
+		for _, fd := range f.Devices {
+			shares[fd.DeviceID] = true
+		}
+	}
+
 	var devices []Device
 	for _, d := range cfg.Devices {
 		if d.DeviceID == status.MyID {
 			continue
 		}
 		conn := conns.Connections[d.DeviceID]
+		unused := !shares[d.DeviceID]
 		state, pct := "Disconnected", 100
 		switch {
 		case d.Paused:
 			state = "Paused"
+		case conn.Connected && unused:
+			state = "Connected (Unused)"
 		case conn.Connected:
 			comp, err := c.DeviceCompletion(d.DeviceID)
 			if err == nil && comp.Completion < 100 {
@@ -128,6 +140,8 @@ func fetch(c *client.Client) dataMsg {
 			} else {
 				state = "Up to Date"
 			}
+		case unused:
+			state = "Disconnected (Unused)"
 		}
 		lastSeen := "-"
 		if ds, ok := devStats[d.DeviceID]; ok && !ds.LastSeen.IsZero() {

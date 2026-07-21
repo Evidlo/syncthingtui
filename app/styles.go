@@ -22,6 +22,9 @@ func stateStyle(state string) lipgloss.Style {
 	switch {
 	case state == "Up to Date":
 		return lipgloss.NewStyle().Foreground(good)
+	case strings.HasPrefix(state, "Connected"):
+		// connected but idle/unused is still a live connection → green
+		return lipgloss.NewStyle().Foreground(good)
 	case strings.HasPrefix(state, "Syncing"):
 		return lipgloss.NewStyle().Foreground(accent)
 	case state == "Out of Sync":
