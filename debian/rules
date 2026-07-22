@@ -1,5 +1,8 @@
 #!/usr/bin/make -f
 
+export GOBIN = $(CURDIR)/debian/_build/bin
+export DH_GOLANG_EXCLUDES := cmd/mockup scripts/livecheck scripts/rocheck
+
 %:
 	dh $@ --builddirectory=debian/_build --buildsystem=golang
 
