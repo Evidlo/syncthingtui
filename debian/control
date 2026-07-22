@@ -24,7 +24,6 @@ Package: syncthingtui
 Section: admin
 Architecture: any
 Depends: ${misc:Depends},
-         ${shlibs:Depends},
 Static-Built-Using: ${misc:Static-Built-Using}
 Description: terminal user interface for Syncthing
  syncthingtui is a terminal user interface for managing Syncthing, aiming for
