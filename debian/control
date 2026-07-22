@@ -1,5 +1,6 @@
 Source: syncthingtui
-Section: golang
+Section: admin
+Priority: optional
 Maintainer: Debian Go Packaging Team <team+pkg-go@tracker.debian.org>
 Uploaders: evan <evan@blackbox.illinois.edu>,
 Build-Depends: debhelper-compat (= 13),
@@ -7,7 +8,7 @@ Build-Depends: debhelper-compat (= 13),
                dpkg-build-api (= 1),
                golang-any,
                golang-github-atotto-clipboard-dev,
-               golang-github-aymanbagabas-go-osc52-dev,
+               golang-github-aymanbagabas-go-osc52-v2-dev,
                golang-github-charmbracelet-bubbles-dev,
                golang-github-charmbracelet-bubbletea-dev,
                golang-github-charmbracelet-lipgloss-dev,
@@ -25,63 +26,10 @@ Architecture: any
 Depends: ${misc:Depends},
          ${shlibs:Depends},
 Static-Built-Using: ${misc:Static-Built-Using}
-Description: TUI for Syncthing (program)
- syncthingtui
+Description: terminal user interface for Syncthing
+ syncthingtui is a terminal user interface for managing Syncthing, aiming for
+ feature parity with the official Syncthing web GUI.
  .
- A Syncthing TUI client with nearly-complete feature parity with the
- Syncthing web GUI.
- .
- [Image: screenshot] (/screenshot.png)
- .
- Note that this app was entirely vibe-engineered from CHAT.txt
- .
- Install
- .
-   go install github.com/evidlo/syncthingtui/cmd/syncthingtui@latest
-   syncthingtui
- .
- Usage
- .
-   Usage of syncthingtui:
-     -address string
-       	syncthing GUI address (default: from config.xml)
-     -api-key string
-       	API key (default: from config.xml)
-     -fake
-       	use fake data instead of a live syncthing
-     -list
-       	list static screen names
-     -screen string
-       	render a named screen statically and exit
-     -size string
-       	WxH for -screen (default "80x60")
- .
- Architecture
- .
-  * client/ — minimal syncthing REST client + local config.xml discovery
-  * app/ — the TUI
-        * app.go — root router (main view ⇄ subview), static screen presets
-        * main_view.go — tabs: Folders, This Device, Remote Devices, Alerts,
-        Actions
-        * subviews.go — Edit Folder / Edit Device / Settings forms (save →
-        REST)
-        * form.go — browse-then-edit form widget (jk browse, enter edit)
-        * live.go — polls syncthing, feeds data into the views
-  * cmd/syncthingtui — entry point; cmd/mockup — frozen design mockups
- .
- Running Tests
- .
-   # run all tests: UI dispatch + layout width tests, plus full REST
- integration
-   # against a temporary syncthing instance in /tmp
-   go test ./...
- .
-   # pieces, individually:
-   ./scripts/test_live.sh      # the REST integration suite on its own
-   go run ./scripts/rocheck    # read-only check against your real
- instance
-   go run ./cmd/syncthingtui -list                            # list TUI
- views
-   go run ./cmd/syncthingtui -screen main-folders -size 80x30 # render a
- view
+ It allows browsing and configuring folders, remote devices, system settings,
+ and active alerts directly from the console using keyboard-driven navigation.
 

@@ -13,3 +13,5 @@ License: GPL-3.0
 Comment: Debian packaging is licensed under the same terms as upstream
 
 License: GPL-3.0
+ On Debian systems, the complete text of the GNU General Public
+ License version 3 can be found in "/usr/share/common-licenses/GPL-3".
