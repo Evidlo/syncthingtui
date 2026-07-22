@@ -1,0 +1,15 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Source: https://github.com/evidlo/syncthingtui
+Upstream-Name: syncthingtui
+Upstream-Contact: Evan Widloski
+
+Files: *
+Copyright: 2026 Evan Widloski
+License: GPL-3.0
+
+Files: debian/*
+Copyright: 2026 evan <evan@blackbox.illinois.edu>
+License: GPL-3.0
+Comment: Debian packaging is licensed under the same terms as upstream
+
+License: GPL-3.0

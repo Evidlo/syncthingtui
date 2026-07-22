@@ -1,0 +1,11 @@
+# This is a template from
+# https://salsa.debian.org/salsa-ci-team/pipeline/-/raw/master/recipes/salsa-ci.yml
+#
+# For documentation please read https://salsa.debian.org/salsa-ci-team/pipeline
+#
+# Disable tests if they can't be easily fixed. The purpose of a CI is to catch
+# regressions, and having a CI file in a new package is moot if it isn't working
+# to begin with.
+---
+include:
+  - https://salsa.debian.org/salsa-ci-team/pipeline/raw/master/recipes/debian.yml

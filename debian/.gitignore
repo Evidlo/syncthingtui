@@ -1,0 +1,8 @@
+*.debhelper
+*.log
+*.substvars
+/.debhelper/
+/_build/
+/debhelper-build-stamp
+/files
+/syncthingtui/
