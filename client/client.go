@@ -478,21 +478,29 @@ func Discover() (address, apiKey string, err error) {
 		filepath.Join(home, ".config/syncthing/config.xml"),
 	}
 	for _, p := range paths {
-		data, rerr := os.ReadFile(p)
-		if rerr != nil {
-			continue
-		}
-		var cfg guiConfig
-		if xerr := xml.Unmarshal(data, &cfg); xerr != nil {
-			continue
-		}
-		if cfg.GUI.APIKey != "" {
-			scheme := "http://"
-			if cfg.GUI.TLS {
-				scheme = "https://"
-			}
-			return scheme + cfg.GUI.Address, cfg.GUI.APIKey, nil
+		if address, apiKey, err = FromConfig(p); err == nil {
+			return address, apiKey, nil
 		}
 	}
 	return "", "", fmt.Errorf("no syncthing config.xml with apikey found")
+}
+
+// FromConfig reads address and API key from the syncthing config.xml at path.
+func FromConfig(path string) (address, apiKey string, err error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", "", err
+	}
+	var cfg guiConfig
+	if err := xml.Unmarshal(data, &cfg); err != nil {
+		return "", "", err
+	}
+	if cfg.GUI.APIKey == "" {
+		return "", "", fmt.Errorf("%s: no apikey found", path)
+	}
+	scheme := "http://"
+	if cfg.GUI.TLS {
+		scheme = "https://"
+	}
+	return scheme + cfg.GUI.Address, cfg.GUI.APIKey, nil
 }
