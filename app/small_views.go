@@ -88,7 +88,8 @@ func (v ShowIDView) View() string {
 // ── About ────────────────────────────────────────────────────────────────────
 
 // TUIVersion is this program's version, shown at the top of About.
-const TUIVersion = "0.1.0-dev"
+// Release builds override it via -ldflags -X (see Makefile).
+var TUIVersion = "0.1.0-dev"
 
 type AboutView struct {
 	stVersion     string
