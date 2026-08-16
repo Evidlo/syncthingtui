@@ -5,7 +5,7 @@
 │                       ▐▛███▜▌                      │ ─────────────────────── │
 │                      ▝▜█████▛▘                     │ What's new              │
 │                        ▘▘ ▝▝                       │ Auto mode is now avail… │
-│ Fable 5 · Claude Pro · evan_claude@widloski.com's  │ Fixed the terminal fre… │
+│ Fable 5 · Claude Pro ·                             │ Fixed the terminal fre… │
 │ Organization                                       │ Fixed remote managed s… │
 │              ~/resources/syncthingtui              │ /release-notes for more │
 ╰──────────────────────────────────────────────────────────────────────────────╯

@@ -1,0 +1,761 @@
+╭─── Claude Code v2.1.216 ─────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│                 Welcome back Evon!                 │ started                 │
+│                                                    │ Run /init to create a … │
+│                       ▐▛███▜▌                      │ ─────────────────────── │
+│                      ▝▜█████▛▘                     │ What's new              │
+│                        ▘▘ ▝▝                       │ Added emoji shortcode … │
+│ Opus 4.8 · Claude Pro ·                            │ Added warnings when tr… │
+│ Organization                                       │ Fixed a memory leak wh… │
+│              ~/resources/syncthingtui              │ /release-notes for more │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+
+❯ /model                                                                        
+  ⎿  Set model to Opus 4.8 and saved as your default for new sessions with
+     medium effort
+
+❯ @AGENTS.md @WORK.md                                                           
+                                                                                
+  the Alerts tab is blank, but in my local syncthing instance I can see there   
+  is 1 new device, 1 new folder, and 1 share folder notification                
+  ⎿  Read AGENTS.md (51 lines)
+  ⎿  Read WORK.md (120 lines)
+
+● I'll investigate why the Alerts tab is blank despite pending notifications.
+  Let me look at the relevant code.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● I'll investigate why the Alerts tab is blank. Let me look at the relevant
+  code.
+
+  Searched for 2 patterns, read 2 files (ctrl+o to expand)
+
+● The parsing code looks reasonable. Since errors are swallowed with _, let me
+  check what the real endpoints actually return on the user's instance. Let me
+  find the connection details.
+
+  Listed 1 directory (ctrl+o to expand)
+
+● Let me query the real pending endpoints directly to see the actual JSON
+  format.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● The <address> grep caught the wrong one. Let me parse the GUI address
+  properly.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Found it. The user's syncthing is v1.12.1, not v1.18 as the docs claim. The
+  /rest/cluster/pending/* endpoints didn't exist until v1.18, so they 404 and
+  the errors are silently swallowed (pendDev, _ := c.PendingDevices()), leaving
+  Alerts blank.
+
+  In older syncthing, the web GUI gets these from the /rest/events stream
+  (DeviceRejected/FolderRejected). Let me confirm.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Confirmed the root cause. Let me read the full live.go to understand the
+  polling architecture before deciding the fix.
+
+  Read 1 file, ran 1 shell command (ctrl+o to expand)
+
+● Now I understand the architecture. fetch() is stateless per-poll, and the
+  version is already fetched. The fix: when the v1.18+ pending endpoints 404
+  (old syncthing), fall back to deriving pending devices/folders from the
+  /rest/events stream (DeviceRejected/FolderRejected), which is exactly what the
+  old web GUI does. Let me look at the client's get helper and how the action
+  handlers work.
+
+  Read 1 file (ctrl+o to expand)
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ how about we add a version check to the GUI.  it can exit early and print to  
+  console if version req is not met                                             
+
+● Good call — that's much simpler and more honest than silently degrading. Let
+  me look at the entry point and how the client is set up.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● This is cleaner. The /rest/cluster/pending/* endpoints (which power Alerts)
+  landed in v1.18.0, so I'll require that minimum and exit with a clear message
+  before entering the altscreen. Let me implement it in main.go.
+
+● Update(cmd/syncthingtui/main.go)  ⎿  Added 49 lines
+      11    "flag"
+      12    "fmt"
+      13    "os"
+      14 +  "strconv"                                                    
+      15 +  "strings"                                                    
+      16  
+      17    tea "github.com/charmbracelet/bubbletea"
+      18  
+     ...
+      20    "github.com/evidlo/syncthingtui/client"
+      21  )
+      22  
+      23 +// minSyncthing is the oldest syncthing the TUI supports: the  
+      24 +// /rest/cluster/pending/{devices,folders} endpoints behind the
+         + Alerts tab                                                    
+      25 +// landed in v1.18.0; older instances 404 there and Alerts is s
+         +ilently blank.                                                 
+      26 +var minSyncthing = [3]int{1, 18, 0}                            
+      27 +                                                               
+      28 +// parseVersion extracts major.minor.patch from a syncthing ver
+         +sion string such                                               
+      29 +// as "v1.12.1-ds1". Returns ok=false when it can't be parsed. 
+      30 +func parseVersion(s string) ([3]int, bool) {                   
+      31 +  s = strings.TrimPrefix(strings.TrimSpace(s), "v")            
+      32 +  if i := strings.IndexAny(s, "-+ "); i >= 0 {                 
+      33 +    s = s[:i]                                                  
+      34 +  }                                                            
+      35 +  parts := strings.Split(s, ".")                               
+      36 +  if len(parts) < 2 {                                          
+      37 +    return [3]int{}, false                                     
+      38 +  }                                                            
+      39 +  var v [3]int                                                 
+      40 +  for i := 0; i < 3 && i < len(parts); i++ {                   
+      41 +    n, err := strconv.Atoi(parts[i])                           
+      42 +    if err != nil {                                            
+      43 +      return [3]int{}, false                                   
+      44 +    }                                                          
+      45 +    v[i] = n                                                   
+      46 +  }                                                            
+      47 +  return v, true                                               
+      48 +}                                                              
+      49 +                                                               
+      50 +// checkVersion fails when the connected syncthing is older tha
+         +n minSyncthing.                                                
+      51 +// An unreadable or unparseable version is not treated as fatal
+         +.                                                              
+      52 +func checkVersion(c *client.Client) error {                    
+      53 +  ver, err := c.Version()                                      
+      54 +  if err != nil {                                              
+      55 +    return fmt.Errorf("cannot read syncthing version: %w", err)
+      56 +  }                                                            
+      57 +  v, ok := parseVersion(ver.Version)                           
+      58 +  if !ok {                                                     
+      59 +    return nil                                                 
+      60 +  }                                                            
+      61 +  if v[0] < minSyncthing[0] ||                                 
+      62 +    (v[0] == minSyncthing[0] && (v[1] < minSyncthing[1] ||     
+      63 +      (v[1] == minSyncthing[1] && v[2] < minSyncthing[2]))) {  
+      64 +    return fmt.Errorf("syncthing %s is too old; syncthingtui ne
+         +eds v%d.%d.%d or newer",                                       
+      65 +      ver.Version, minSyncthing[0], minSyncthing[1], minSyncthi
+         +ng[2])                                                         
+      66 +  }                                                            
+      67 +  return nil                                                   
+      68 +}                                                              
+      69 +                                                               
+      70  func main() {
+      71    screen := flag.String("screen", "", "render a named screen st
+          atically and exit")
+      72    size := flag.String("size", "80x60", "WxH for -screen")
+
+● Update(cmd/syncthingtui/main.go)
+  ⎿  Added 6 lines, removed 1 line
+      109          key = dKey
+      110        }
+      111      }
+      112 -    a = app.NewLive(client.New(addr, key))                    
+      112 +    c := client.New(addr, key)                                
+      113 +    if err := checkVersion(c); err != nil {                   
+      114 +      fmt.Fprintln(os.Stderr, err)                            
+      115 +      os.Exit(1)                                              
+      116 +    }                                                         
+      117 +    a = app.NewLive(c)                                        
+      118    }
+      119    if _, err := tea.NewProgram(a, tea.WithAltScreen()).Run(); e
+           rr != nil {
+      120      fmt.Fprintln(os.Stderr, err)
+
+● Now let me build and test it against the real (v1.12.1) instance to confirm it
+  exits cleanly:
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Exits cleanly with a clear message. Let me sanity-check the version
+  parsing/comparison across cases:
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● All cases correct — boundary at v1.18.0 passes, pre-release tags stripped,
+  unparseable versions don't block. Let me clean up the scratch file and update
+  the docs (AGENTS.md's "Local syncthing is v1.18" is actually wrong — it's
+  v1.12.1).
+
+  Read 1 file, ran 1 shell command (ctrl+o to expand)
+
+● Update(AGENTS.md)
+  ⎿  User rejected update to AGENTS.md
+
+✻ Worked for 1m 32s
+
+❯ version check looks good.  I notice that the newly added device "Pixel 4a     
+  (5G)" shows as "Connected (Unused)" in the web interface, but syncthingtui    
+  shows it as "Syncing" state                                                   
+
+● Version check is in. Now the device-state bug — "Connected (Unused)" in the
+  web GUI means the device is connected but shares zero folders with us; our
+  code instead calls the completion API, gets 0%, and renders "Syncing". Let me
+  look at the exact logic.
+
+  Read 1 file (ctrl+o to expand)
+
+● I'll compute which devices actually share folders with us and render
+  "Connected (Unused)" when a connected device shares none — matching the web
+  GUI. Let me add a shares map and branch on it.
+
+● Update(app/live.go)
+  ⎿  Added 11 lines
+      111      localFiles += db.LocalFiles
+      112    }
+      113  
+      114 +  // A device is "unused" when it shares no folders with us; t
+          +he web GUI                                                    
+      115 +  // labels such devices "(Unused)" instead of showing sync pr
+          +ogress.                                                       
+      116 +  shares := map[string]bool{}                                 
+      117 +  for _, f := range cfg.Folders {                             
+      118 +    for _, fd := range f.Devices {                            
+      119 +      shares[fd.DeviceID] = true                              
+      120 +    }                                                         
+      121 +  }                                                           
+      122 +                                                              
+      123    var devices []Device
+      124    for _, d := range cfg.Devices {
+      125      if d.DeviceID == status.MyID {
+     ...
+      130      switch {
+      131      case d.Paused:
+      132        state = "Paused"
+      133 +    case conn.Connected && !shares[d.DeviceID]:               
+      134 +      state = "Connected (Unused)"                            
+      135      case conn.Connected:
+      136        comp, err := c.DeviceCompletion(d.DeviceID)
+      137        if err == nil && comp.Completion < 100 {
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Done. Both changes build cleanly.
+
+  Device state fix (app/live.go): before the device loop I build a shares set of
+  every device ID that appears in any folder's device list. A connected device
+  that shares no folders now renders "Connected (Unused)" — matching the web GUI
+  — instead of falling through to the completion API, which returns 0% for such
+  a device and made it read as "Syncing".
+
+  The precedence is: Paused → Connected (Unused) → completion-based Syncing/Up
+  to Date → Disconnected.
+
+  One note: I couldn't visually verify against a live instance since your local
+  syncthing is v1.12.1 and the new version check now blocks it. If you have a
+  v1.18+ instance handy, go run ./cmd/syncthingtui -address <addr> -api-key 
+  <key> will confirm the "Pixel 4a (5G)" device now shows "Connected (Unused)".
+
+  Want me to also apply the "(Unused)" suffix to the disconnected case (the web
+  GUI shows "Disconnected (Unused)" for unused offline devices too), or keep it
+  scoped to the connected state you reported?
+
+✻ Cogitated for 1m 1s
+
+❯ yes match the syncthing GUI, also Connected (Unused) dot should be green not  
+  gray                                                                          
+
+  Read 1 file, ran 1 shell command (ctrl+o to expand)
+
+● I'll match the GUI for the disconnected-unused case and make the "Connected"
+  dot green.
+
+● Update(app/styles.go)
+  ⎿  Added 3 lines
+      22    switch {
+      23    case state == "Up to Date":
+      24      return lipgloss.NewStyle().Foreground(good)
+      25 +  case strings.HasPrefix(state, "Connected"):                  
+      26 +    // connected but idle/unused is still a live connection → g
+         +reen                                                           
+      27 +    return lipgloss.NewStyle().Foreground(good)                
+      28    case strings.HasPrefix(state, "Syncing"):
+      29      return lipgloss.NewStyle().Foreground(accent)
+      30    case state == "Out of Sync":
+
+● Update(app/live.go)
+  ⎿  Added 4 lines, removed 1 line
+      126        continue
+      127      }
+      128      conn := conns.Connections[d.DeviceID]
+      129 +    unused := !shares[d.DeviceID]                             
+      130      state, pct := "Disconnected", 100
+      131      switch {
+      132      case d.Paused:
+      133        state = "Paused"
+      133 -    case conn.Connected && !shares[d.DeviceID]:               
+      134 +    case conn.Connected && unused:                            
+      135        state = "Connected (Unused)"
+      136      case conn.Connected:
+      137        comp, err := c.DeviceCompletion(d.DeviceID)
+     ...
+      140        } else {
+      141          state = "Up to Date"
+      142        }
+      143 +    case unused:                                              
+      144 +      state = "Disconnected (Unused)"                         
+      145      }
+      146      lastSeen := "-"
+      147      if ds, ok := devStats[d.DeviceID]; ok && !ds.LastSeen.IsZe
+           ro() {
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Done.
+
+  app/live.go — the disconnected case now appends (Unused): a device sharing no
+  folders reads "Disconnected (Unused)" when offline, "Connected (Unused)" when
+  online, matching the web GUI. Paused still takes precedence.
+
+  app/styles.go — added a strings.HasPrefix(state, "Connected") case returning
+  good (green), so the "Connected (Unused)" dot is green like any live
+  connection. "Disconnected (Unused)" falls through to the default dim/gray dot,
+  also matching the GUI.
+
+✻ Baked for 46s
+
+❯ are we handling all possible device states now?  what about folders?  can     
+  provide syncthing source if necessary                                         
+● Let me check the syncthing GUI source — AGENTS.md references
+  ../syncthing/gui/default/, so it may be available locally.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Syncthing source isn't checked out locally (the ../syncthing path in AGENTS.md
+  doesn't exist). Let me read our current folder-state logic, then pull the
+  authoritative state logic from the syncthing source to do a proper gap
+  analysis.
+
+  Read 1 file (ctrl+o to expand)
+
+● Fetch(https://raw.githubusercontent.com/syncthing/syncthing/v2.0.13/gui/defaul
+       t/syncthing/core/syncthingController.js)
+  ⎿  Received 147.4KB (200 OK)
+
+● Now I have the authoritative logic. Let me check what fields our
+  DBStatus/FolderCfg structs expose so I know which states we can derive.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● The source gives me the authoritative state machine. Let me also grab the
+  exact English labels so I match the GUI's wording precisely.
+
+● Fetch(https://raw.githubusercontent.com/syncthing/syncthing/v2.0.13/gui/defaul
+       t/assets/lang/lang-en.json)
+  ⎿  Received 45.2KB (200 OK)
+
+● The labels are identity-mapped (confirmed). Let me grab the exact color
+  classes the GUI uses for each state so our status dots match, rather than
+  guessing.
+
+● Fetch(https://raw.githubusercontent.com/syncthing/syncthing/v2.0.13/gui/defaul
+       t/index.html)
+  ⎿  Received 73KB (200 OK)
+
+● The colors come from folderClass()/deviceClass() in the controller. Let me
+  fetch those.
+
+● Fetch(https://raw.githubusercontent.com/syncthing/syncthing/v2.0.13/gui/defaul
+       t/syncthing/core/syncthingController.js)
+  ⎿  Received 147.4KB (200 OK)
+
+● Now I have the complete, authoritative color mapping. Let me look at our color
+  palette to map bootstrap classes
+  (success/danger/primary/warning/default/info) to our lipgloss colors.
+
+  Read 1 file (ctrl+o to expand)
+
+● I now have the complete authoritative mapping. Let me implement. First, add
+  the color and the DBStatus fields needed for the extra folder states.
+
+● Update(client/client.go)
+  ⎿  Added 8 lines, removed 5 lines
+      137  }
+      138  
+      139  type DBStatus struct {
+      140 -  State       string `json:"state"`                           
+      141 -  GlobalBytes int64  `json:"globalBytes"`                     
+      142 -  LocalBytes  int64  `json:"localBytes"`                      
+      143 -  NeedBytes   int64  `json:"needBytes"`                       
+      144 -  LocalFiles  int64  `json:"localFiles"`                      
+      140 +  State                 string `json:"state"`                 
+      141 +  GlobalBytes           int64  `json:"globalBytes"`           
+      142 +  LocalBytes            int64  `json:"localBytes"`            
+      143 +  NeedBytes             int64  `json:"needBytes"`             
+      144 +  NeedTotalItems        int64  `json:"needTotalItems"`        
+      145 +  ReceiveOnlyTotalItems int64  `json:"receiveOnlyTotalItems"` 
+      146 +  PullErrors            int64  `json:"pullErrors"`            
+      147 +  LocalFiles            int64  `json:"localFiles"`            
+      148  }
+      149  
+      150  type SizeCfg struct {
+
+● Update(app/styles.go)
+  ⎿  Added 6 lines, removed 5 lines
+       7  )
+       8  
+       9  var (
+      10 -  accent   = lipgloss.Color("4")                               
+      11 -  dim      = lipgloss.Color("8")                               
+      12 -  good     = lipgloss.Color("2")                               
+      13 -  warn     = lipgloss.Color("3")                               
+      14 -  bad      = lipgloss.Color("1")                               
+      10 +  accent   = lipgloss.Color("4") // bootstrap "primary"        
+      11 +  dim      = lipgloss.Color("8") // bootstrap "default" (muted)
+      12 +  good     = lipgloss.Color("2") // bootstrap "success"        
+      13 +  warn     = lipgloss.Color("3") // bootstrap "warning"        
+      14 +  bad      = lipgloss.Color("1") // bootstrap "danger"         
+      15 +  info     = lipgloss.Color("6") // bootstrap "info"           
+      16    dimStyle = lipgloss.NewStyle().Foreground(dim)
+      17    keyStyle = lipgloss.NewStyle().Foreground(accent).Bold(true)
+      18    boldSt   = lipgloss.NewStyle().Bold(true)
+
+● Now rewrite stateStyle to cover every state with the GUI's exact color
+  classes:
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(app/styles.go)
+  ⎿  Added 23 lines, removed 7 lines
+      19    warnSt   = lipgloss.NewStyle().Foreground(warn)
+      20  )
+      21  
+      22 +// stateStyle colors a status dot to match the web GUI's folder
+         +Class/deviceClass                                              
+      23 +// (bootstrap color → our palette). See folderState (live.go) f
+         +or the labels.                                                 
+      24  func stateStyle(state string) lipgloss.Style {
+      25    switch {
+      24 -  case state == "Up to Date":                                  
+      26 +  // success (green): folder idle / local additions; device up-
+         +to-date or                                                     
+      27 +  // connected-but-unused (a live connection is still green)   
+      28 +  case state == "Up to Date", state == "Local Additions",      
+      29 +    strings.HasPrefix(state, "Connected"):                     
+      30      return lipgloss.NewStyle().Foreground(good)
+      26 -  case strings.HasPrefix(state, "Connected"):                  
+      27 -    // connected but idle/unused is still a live connection → g
+         -reen                                                           
+      28 -    return lipgloss.NewStyle().Foreground(good)                
+      29 -  case strings.HasPrefix(state, "Syncing"):                    
+      31 +  // primary (blue): busy                                      
+      32 +  case strings.HasPrefix(state, "Syncing"), state == "Preparing
+         + to Sync",                                                     
+      33 +    state == "Scanning", state == "Cleaning Versions":         
+      34      return lipgloss.NewStyle().Foreground(accent)
+      31 -  case state == "Out of Sync":                                 
+      35 +  // danger (red)                                              
+      36 +  case state == "Stopped", state == "Error", state == "Out of S
+         +ync",                                                          
+      37 +    state == "Failed Items", state == "Local Data Unencrypted":
+      38      return lipgloss.NewStyle().Foreground(bad)
+      39 +  // warning (yellow): unshared + the waiting states           
+      40 +  case state == "Unshared", state == "Waiting to Sync",        
+      41 +    state == "Waiting to Scan", state == "Waiting to Clean":   
+      42 +    return warnSt                                              
+      43 +  // default (muted): paused                                   
+      44 +  case strings.HasPrefix(state, "Paused"):                     
+      45 +    return dimStyle                                            
+      46 +  // info (cyan): unknown + every disconnected variant         
+      47 +  case state == "Unknown", strings.HasPrefix(state, "Disconnect
+         +ed"):                                                          
+      48 +    return lipgloss.NewStyle().Foreground(info)                
+      49    }
+      34 -  return dimStyle                                              
+      50 +  return lipgloss.NewStyle().Foreground(info)                  
+      51  }
+      52  
+      53  var superscripts = []string{"¹", "²", "³", "⁴", "⁵", "⁶", "⁷", 
+          "⁸", "⁹"}
+
+● Now rewrite folderState to mirror the GUI's folderStatus:
+
+● Update(app/live.go)
+  ⎿  Added 37 lines, removed 8 lines
+      48    return humanBytes(int64(bytesPerSec)) + "/s"
+      49  }
+      50  
+      51 +// folderState mirrors the web GUI's folderStatus(): a "busy" d
+         +b.State maps                                                   
+      52 +// straight to a label; an idle folder is refined (out of sync 
+         +/ failed items /                                               
+      53 +// local additions / unshared / up to date) in the GUI's preced
+         +ence order.                                                    
+      54  func folderState(cfg client.FolderCfg, db client.DBStatus) (str
+          ing, int) {
+      55    pct := 100
+      56    if db.GlobalBytes > 0 {
+      57      pct = int(100 * (db.GlobalBytes - db.NeedBytes) / db.Global
+          Bytes)
+      58    }
+      56 -  switch {                                                     
+      57 -  case cfg.Paused:                                             
+      59 +  if cfg.Paused {                                              
+      60      return "Paused", pct
+      59 -  case db.State == "syncing", db.State == "sync-preparing":    
+      60 -    return "Syncing", pct                                      
+      61 -  case db.State == "scanning":                                 
+      61 +  }                                                            
+      62 +  if db.State == "" {                                          
+      63 +    return "Unknown", pct                                      
+      64 +  }                                                            
+      65 +  switch db.State {                                            
+      66 +  case "error":                                                
+      67 +    return "Stopped", pct                                      
+      68 +  case "scanning":                                             
+      69      return "Scanning", pct
+      63 -  case db.State == "error", db.State == "stopped":             
+      64 -    return "Error", pct                                        
+      65 -  case db.NeedBytes > 0:                                       
+      70 +  case "syncing":                                              
+      71 +    return "Syncing", pct                                      
+      72 +  case "sync-preparing":                                       
+      73 +    return "Preparing to Sync", pct                            
+      74 +  case "cleaning":                                             
+      75 +    return "Cleaning Versions", pct                            
+      76 +  case "sync-waiting":                                         
+      77 +    return "Waiting to Sync", pct                              
+      78 +  case "scan-waiting":                                         
+      79 +    return "Waiting to Scan", pct                              
+      80 +  case "clean-waiting":                                        
+      81 +    return "Waiting to Clean", pct                             
+      82 +  }                                                            
+      83 +  // db.State == "idle"                                        
+      84 +  switch {                                                     
+      85 +  case db.NeedTotalItems > 0:                                  
+      86      return "Out of Sync", pct
+      87 +  case db.PullErrors > 0:                                      
+      88 +    return "Failed Items", pct                                 
+      89 +  case db.ReceiveOnlyTotalItems > 0:                           
+      90 +    if cfg.Type == "receiveonly" {                             
+      91 +      return "Local Additions", pct                            
+      92 +    }                                                          
+      93 +    return "Local Data Unencrypted", pct                       
+      94 +  case len(cfg.Devices) <= 1:                                  
+      95 +    return "Unshared", pct                                     
+      96    }
+      97    return "Up to Date", pct
+      98  }
+
+● Now the device-state block, mirroring deviceStatus:
+
+  Read 1 file (ctrl+o to expand)
+● Update(app/live.go)
+  ⎿  Added 19 lines, removed 9 lines
+      154      if d.DeviceID == status.MyID {
+      155        continue
+      156      }
+      157 -    conn := conns.Connections[d.DeviceID]                     
+      157 +    conn, known := conns.Connections[d.DeviceID]              
+      158 +    ds, hasStats := devStats[d.DeviceID]                      
+      159      unused := !shares[d.DeviceID]
+      159 -    state, pct := "Disconnected", 100                         
+      160 +    suffix := ""                                              
+      161 +    if unused {                                               
+      162 +      suffix = " (Unused)"                                    
+      163 +    }                                                         
+      164 +    state, pct := "Disconnected"+suffix, 100                  
+      165      switch {
+      166 +    case !known:                                              
+      167 +      // no connection record yet (e.g. just after startup)   
+      168 +      state = "Unknown"                                       
+      169      case d.Paused:
+      162 -      state = "Paused"                                        
+      170 +      state = "Paused" + suffix                               
+      171      case conn.Connected && unused:
+      172        state = "Connected (Unused)"
+      173      case conn.Connected:
+      174        comp, err := c.DeviceCompletion(d.DeviceID)
+      167 -      if err == nil && comp.Completion < 100 {                
+      168 -        state, pct = fmt.Sprintf("Syncing (%.0f%%)", comp.Comp
+          -letion), int(comp.Completion)                                 
+      169 -      } else {                                                
+      175 +      if err == nil && comp.Completion >= 100 {               
+      176          state = "Up to Date"
+      177 +      } else {                                                
+      178 +        state, pct = fmt.Sprintf("Syncing (%.0f%%)", comp.Comp
+          +letion), int(comp.Completion)                                 
+      179        }
+      172 -    case unused:                                              
+      173 -      state = "Disconnected (Unused)"                         
+      180 +    case !unused && hasStats && lastSeenValid(ds.LastSeen) && 
+      181 +      time.Since(ds.LastSeen) >= 7*24*time.Hour:              
+      182 +      // shared device unseen for a week → the GUI's "inactive
+          +" state                                                       
+      183 +      state = "Disconnected (Inactive)"                       
+      184      }
+      185      lastSeen := "-"
+      176 -    if ds, ok := devStats[d.DeviceID]; ok && !ds.LastSeen.IsZe
+          -ro() {                                                        
+      186 +    if hasStats && lastSeenValid(ds.LastSeen) {               
+      187        lastSeen = ds.LastSeen.Local().Format("2006-01-02 15:04"
+           )
+      188      }
+      189      devices = append(devices, Device{
+
+● I used a lastSeenValid helper (syncthing returns the 1970 epoch for never-seen
+  devices, which time.IsZero() doesn't catch). Let me add it:
+
+● Update(app/live.go)
+  ⎿  Added 6 lines
+      48    return humanBytes(int64(bytesPerSec)) + "/s"
+      49  }
+      50  
+      51 +// lastSeenValid reports whether a device has ever actually bee
+         +n seen.                                                        
+      52 +// syncthing reports the 1970 epoch (not Go's zero time) for ne
+         +ver-seen devices.                                              
+      53 +func lastSeenValid(t time.Time) bool {                         
+      54 +  return !t.IsZero() && t.Year() > 1971                        
+      55 +}                                                              
+      56 +                                                               
+      57  // folderState mirrors the web GUI's folderStatus(): a "busy" d
+          b.State maps
+      58  // straight to a label; an idle folder is refined (out of sync 
+          / failed items /
+      59  // local additions / unshared / up to date) in the GUI's preced
+          ence order.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Let me check that the pause/resume button logic doesn't break with the new
+  suffixed labels (it compared State == "Paused"):
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Line 250 breaks for a paused unused device (now "Paused (Unused)") — it'd show
+  "Pause" on an already-paused device. Let me look and fix that to a prefix
+  check.
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(app/main_view.go)
+  ⎿  Added 2 lines, removed 1 line
+      247  
+      248  func (m *MainModel) deviceButtons() []string {
+      249    pause := "Pause"
+      250 -  if m.deviceIdx < len(m.devices) && m.devices[m.deviceIdx].St
+          -ate == "Paused" {                                             
+      250 +  // device paused states carry a "(Unused)" suffix, so match 
+          +by prefix                                                     
+      251 +  if m.deviceIdx < len(m.devices) && strings.HasPrefix(m.devic
+          +es[m.deviceIdx].State, "Paused") {                            
+      252      pause = "Resume"
+      253    }
+      254    return []string{"Edit", pause}
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Build passes. Let me run the full app test suite once more to confirm nothing
+  regressed:
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Everything builds, vets, and tests pass. Here's the full parity work, all
+  mirrored from syncthing v2.0.13's syncthingController.js
+  (deviceStatus/folderStatus + deviceClass/folderClass):
+
+  Device states (app/live.go)
+
+  Now covers every state the GUI produces:
+  - Unknown — no connection record yet (startup)
+  - Paused / Paused (Unused)
+  - Connected (Unused) — connected, shares no folders
+  - Syncing (N%) / Up to Date — connected, by completion
+  - Disconnected / Disconnected (Unused)
+  - Disconnected (Inactive) — shared device unseen ≥ 7 days (with a
+  lastSeenValid helper to reject syncthing's 1970-epoch "never seen")
+
+  Folder states (app/live.go)
+
+  Was 5 states, now the full set: Unknown, Stopped, Scanning, Syncing, Preparing
+  to Sync, Cleaning Versions, Waiting to Sync/Scan/Clean, Out of Sync, Failed 
+  Items, Local Additions, Local Data Unencrypted, Unshared, Up to Date, Paused —
+  with the GUI's idle-refinement precedence (needTotalItems → pullErrors →
+  receive-only → unshared). Added NeedTotalItems, ReceiveOnlyTotalItems,
+  PullErrors to client.DBStatus.
+
+  Dot colors (app/styles.go)
+
+  stateStyle now maps each label to the GUI's exact bootstrap class: green
+  (success), blue (primary/busy), red (danger), yellow (warning), muted
+  (paused), and a new cyan info color for unknown/disconnected — matching
+  folderClass/deviceClass rather than defaulting everything to gray.
+
+  Fixed a latent bug (app/main_view.go)
+
+  The device Pause/Resume button checked State == "Paused", which would show
+  "Pause" on an already-paused unused device (now "Paused (Unused)"). Switched
+  to a prefix match.
+
+  One caveat: I couldn't visually verify against a live instance since your
+  local syncthing is v1.12.1 (blocked by the new version check). The logic is a
+  direct port of the GUI source, and faileditems uses db.PullErrors from
+  /rest/db/status rather than the GUI's separate /rest/folder/errors call — if
+  you'd rather match that exactly, I can wire the extra endpoint.
+
+✻ Crunched for 7m 13s
+
+※ recap: We made the syncthingtui Alerts/status display match the syncthing web GUI: added a v1.18 minimum-version check plus full device and folder state coverage with correct dot colors. Next, verify it live against a v1.18+ instance since your local syncthing is too old to test. (disable recaps in /config)
+
+❯ change tab ordering: "Folders", "Remote Devices", "Alerts", "This Device",    
+  "Actions"                                                                     
+
+  Read 1 file, ran 1 shell command (ctrl+o to expand)
+
+● Let me check how number-key tab switching and the view/update switches
+  reference these — to ensure reordering the constants is safe.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Everything uses named constants (except the number-key handler, which is
+  position-based and will follow the label order). I'll reorder the const block
+  and the labels slice together.
+
+● Update(app/main_view.go)
+  ⎿  Added 1 line, removed 1 line
+      17  
+      18  const (
+      19    tabFolders = iota
+      20 -  tabThisDevice                                                
+      20    tabDevices
+      21    tabAlerts
+      22 +  tabThisDevice                                                
+      23    tabActions
+      24  )
+      25  
+
+● Update(app/main_view.go)
+  ⎿  Added 1 line, removed 1 line
+      153    if n := len(m.alerts); n > 0 {
+      154      alerts += dimStyle.Render(fmt.Sprintf(" (%d)", n))
+      155    }
+      156 -  return []string{"Folders", "This Device", "Remote Devices", 
+          -alerts, "Actions"}                                            
+      156 +  return []string{"Folders", "Remote Devices", alerts, "This D
+          +evice", "Actions"}                                            
+      157  }
+      158  
+      159  func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Tab order is now Folders → Remote Devices → Alerts → This Device → Actions,
+  with the superscript hotkeys renumbered accordingly (Remote Devices² …
+  Actions⁵). Builds and tests pass, and the static render confirms the new bar.
+  The -screen presets (main-devices, main-thisdevice) still resolve correctly
+  since they use the named constants.
+
+✻ Churned for 45s
