@@ -1,0 +1,103 @@
+.TH SYNCTHINGTUI 1 "August 2026" "syncthingtui 1.0.1" "User Commands"
+.SH NAME
+syncthingtui \- terminal user interface for Syncthing
+.SH SYNOPSIS
+.B syncthingtui
+.RI [ options ]
+.SH DESCRIPTION
+.B syncthingtui
+is a keyboard-driven terminal user interface for managing a running
+.BR syncthing (1)
+instance, aiming for feature parity with the official Syncthing web GUI.
+.PP
+It allows adding/editing/pausing/resuming/rescanning of devices and folders,
+system settings changes, and new device or folder offers to be accepted.
+.PP
+With no options,
+.B syncthingtui
+discovers the address and API key of the local Syncthing instance from its
+.I config.xml
+(see
+.BR FILES )
+and connects to it, polling for updated state every three seconds.
+.PP
+A terminal of at least 80x60 characters is recommended.
+.SH OPTIONS
+.TP
+.BI \-address " ADDRESS"
+Syncthing GUI address, for example
+.IR 127.0.0.1:8384 .
+By default this is read from
+.IR config.xml .
+If the GUI is configured for TLS, an
+.I https
+connection is used; certificate verification is skipped, as Syncthing GUI
+certificates are self-signed, and the API key provides authentication.
+.TP
+.BI \-api\-key " KEY"
+API key used to authenticate to the Syncthing REST API. Defaults to the value
+of the
+.B SYNCTHING_API_KEY
+environment variable, or, if that is unset, to the key read from
+.IR config.xml .
+.TP
+.B \-fake
+Run against built-in fake data instead of a live Syncthing instance. Useful
+for trying out the interface without a running daemon.
+.TP
+.B \-list
+List the names of the static screens accepted by
+.B \-screen
+and exit.
+.TP
+.BI \-screen " NAME"
+Render the named screen statically to standard output and exit, using fake
+data. Intended for layout review and testing rather than interactive use.
+.TP
+.BI \-size " WxH"
+Terminal size, as width by height in characters, used with
+.BR \-screen .
+Defaults to
+.IR 80x60 .
+.SH KEY BINDINGS
+.TP
+.BR Tab ", " Shift+Tab
+Switch to the next or previous tab. The number keys select a tab directly.
+.TP
+.BR j ", " k ", " Up ", " Down
+Move between items in a list or fields in a form.
+.TP
+.B Enter
+Activate the selected item, or begin editing the selected field. While editing,
+.B Enter
+commits the value.
+.TP
+.BR Esc ", " q ", " Backspace
+Leave the current view, or quit from the top level. While a field is being
+edited,
+.B Esc
+cancels the edit and only then leaves the view.
+.SH FILES
+.TP
+.I ~/.local/state/syncthing/config.xml
+Syncthing configuration, read to discover the GUI address and API key.
+.TP
+.I ~/.config/syncthing/config.xml
+Legacy location of the above, used if the first is not present.
+.SH ENVIRONMENT
+.TP
+.B SYNCTHING_API_KEY
+Default value for
+.BR \-api\-key .
+.SH EXIT STATUS
+.B syncthingtui
+exits 0 on success, and non-zero if no Syncthing instance could be discovered
+or contacted, or if the arguments were invalid.
+.SH SEE ALSO
+.BR syncthing (1)
+.PP
+The Syncthing documentation at
+.UR https://docs.syncthing.net/
+.UE .
+.SH AUTHOR
+Evan Widloski.
