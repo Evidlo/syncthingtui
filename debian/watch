@@ -1,7 +1,7 @@
-version=4
+version=5
 opts="mode=git, pgpmode=none" \
   https://github.com/evidlo/syncthingtui.git \
-  HEAD debian
+  refs/tags/v([\d.]+) debian
 
 # Use the following when upstream starts to tag releases:
 #
