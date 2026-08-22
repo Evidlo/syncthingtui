@@ -4,6 +4,7 @@ Maintainer: Debian Go Packaging Team <team+pkg-go@tracker.debian.org>
 Uploaders: Evan Widloski <evan_debian@widloski.com>,
 Build-Depends: debhelper-compat (= 14),
                dh-sequence-golang,
+               dh-sequence-single-binary,
                dpkg-build-api (= 1),
                golang-any,
                golang-github-atotto-clipboard-dev,

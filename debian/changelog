@@ -1,5 +1,9 @@
-syncthingtui (0.0~git20260721.5f7a07b-1) UNRELEASED; urgency=medium
+syncthingtui (1.0.1-1) unstable; urgency=medium
 
+  [ evan ]
   * Initial release (Closes: #1142005)
 
- -- evan <evan@blackbox.illinois.edu>  Tue, 21 Jul 2026 19:58:34 -0500
+  [ Evan Widloski ]
+  * 
+
+ -- Evan Widloski <evan_debian@widloski.com>  Sat, 22 Aug 2026 01:02:07 -0500

@@ -7,7 +7,7 @@ export DH_GOLANG_EXCLUDES := cmd/mockup scripts/livecheck scripts/rocheck
 	dh $@ --builddirectory=debian/_build --buildsystem=golang
 
 override_dh_auto_install:
-	dh_auto_install -- --no-source
+	dh_auto_install --destdir=debian/syncthingtui -- --no-source
 
 override_dh_auto_test:
 	dh_auto_test -- -short
