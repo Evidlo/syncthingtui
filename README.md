@@ -51,3 +51,12 @@ Usage of syncthingtui:
     go run ./scripts/rocheck    # read-only check against your real instance
     go run ./cmd/syncthingtui -list                            # list TUI views
     go run ./cmd/syncthingtui -screen main-folders -size 80x30 # render a view
+
+## License
+
+Copyright (C) 2026 Evan Widloski
+
+syncthingtui is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See [LICENSE](LICENSE) for the full text.
