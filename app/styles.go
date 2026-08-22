@@ -54,8 +54,12 @@ var superscripts = []string{"¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸",
 
 // boxedTabs renders a tab row: boxed active tab, hidden borders otherwise,
 // dim superscript hotkeys.
-func boxedTabs(labels []string, active int) string {
-	inactive := lipgloss.NewStyle().Padding(0, 1).Border(lipgloss.HiddenBorder())
+func boxedTabs(labels []string, active int) string { return boxedTabsPad(labels, active, 1) }
+
+// boxedTabsPad is boxedTabs with configurable inactive-tab padding; pad 0
+// gives the compact row used when a Back button shares the line.
+func boxedTabsPad(labels []string, active, pad int) string {
+	inactive := lipgloss.NewStyle().Padding(0, pad).Border(lipgloss.HiddenBorder())
 	activeSt := lipgloss.NewStyle().Padding(0, 1).Border(lipgloss.NormalBorder()).BorderForeground(accent)
 	tabs := make([]string, len(labels))
 	for i, l := range labels {
@@ -96,6 +100,16 @@ func progressBar(pct, width int) string {
 		dimStyle.Render(strings.Repeat("░", width-filled))
 }
 
+// tabsWithBack renders a sub-tab row with the boxed Back button (esc)
+// right-aligned on the same rows.
+func tabsWithBack(labels []string, active, width int) string {
+	tabs := boxedTabsPad(labels, active, 0)
+	back := lipgloss.NewStyle().Padding(0, 1).Border(lipgloss.NormalBorder()).
+		BorderForeground(accent).Render("Back" + dimStyle.Render("ᵉˢᶜ"))
+	gap := max(0, width-lipgloss.Width(tabs)-lipgloss.Width(back))
+	return lipgloss.JoinHorizontal(lipgloss.Bottom, tabs, strings.Repeat(" ", gap), back)
+}
+
 // infobarTop renders the subview header: bold title left, boxed Back button
 // (esc) right — same height as the main tab bar.
 func infobarTop(title, sub string, width int) string {
@@ -105,6 +119,27 @@ func infobarTop(title, sub string, width int) string {
 	back := backSt.Render("Back" + dimStyle.Render("ᵉˢᶜ"))
 	gap := max(0, width-lipgloss.Width(left)-lipgloss.Width(back))
 	return lipgloss.JoinHorizontal(lipgloss.Bottom, left, strings.Repeat(" ", gap), back)
+}
+
+// scrollToCursor clips body to height rows when it is taller, scrolled so the
+// cursor line sits near the center; dim ⋮ markers replace the edge rows where
+// content continues off-screen. Stateless: the offset is derived from the
+// cursor alone, so the cursor never lands on a marker row (it only reaches an
+// edge when that side is fully scrolled and the marker is absent).
+func scrollToCursor(body string, cursorLine, height int) string {
+	lines := strings.Split(strings.TrimRight(body, "\n"), "\n")
+	if height <= 0 || len(lines) <= height {
+		return body
+	}
+	off := clamp(cursorLine-(height-1)/2, 0, len(lines)-height)
+	out := append([]string{}, lines[off:off+height]...)
+	if off > 0 {
+		out[0] = dimStyle.Render("  ⋮")
+	}
+	if off+height < len(lines) {
+		out[height-1] = dimStyle.Render("  ⋮")
+	}
+	return strings.Join(out, "\n")
 }
 
 // page pads/clips body between a top row and status bar to fill the window.

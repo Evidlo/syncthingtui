@@ -1,0 +1,34 @@
+Source: syncthingtui
+Section: admin
+Priority: optional
+Maintainer: Debian Go Packaging Team <team+pkg-go@tracker.debian.org>
+Uploaders: evan <evan@blackbox.illinois.edu>,
+Build-Depends: debhelper-compat (= 13),
+               dh-sequence-golang,
+               dpkg-build-api (= 1),
+               golang-any,
+               golang-github-atotto-clipboard-dev,
+               golang-github-aymanbagabas-go-osc52-v2-dev,
+               golang-github-charmbracelet-bubbles-dev,
+               golang-github-charmbracelet-bubbletea-dev,
+               golang-github-charmbracelet-lipgloss-dev,
+               golang-github-skip2-go-qrcode-dev,
+Testsuite: autopkgtest-pkg-go
+Standards-Version: 4.7.0
+Vcs-Browser: https://salsa.debian.org/go-team/packages/syncthingtui
+Vcs-Git: https://salsa.debian.org/go-team/packages/syncthingtui.git
+Homepage: https://github.com/evidlo/syncthingtui
+XS-Go-Import-Path: github.com/evidlo/syncthingtui
+
+Package: syncthingtui
+Section: admin
+Architecture: any
+Depends: ${misc:Depends},
+Static-Built-Using: ${misc:Static-Built-Using}
+Description: terminal user interface for Syncthing
+ syncthingtui is a terminal user interface for managing Syncthing, aiming for
+ feature parity with the official Syncthing web GUI.
+ .
+ It allows browsing and configuring folders, remote devices, system settings,
+ and active alerts directly from the console using keyboard-driven navigation.
+

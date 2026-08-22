@@ -13,6 +13,9 @@ import (
 // closeMsg asks the root App to pop the current subview.
 type closeMsg struct{ flash string }
 
+// ratesMsg carries the current transfer-rate string to the open subview.
+type ratesMsg string
+
 // App routes between the main tabbed view and one subview at a time.
 type App struct {
 	main            MainModel
@@ -52,6 +55,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.sub = msg.view
 		sub, cmd := a.sub.Update(tea.WindowSizeMsg{Width: a.width, Height: a.height})
 		a.sub = sub
+		a.sub, _ = a.sub.Update(ratesMsg(a.main.rates))
 		return a, tea.Batch(a.sub.Init(), cmd)
 	case closeMsg:
 		a.sub = nil
@@ -76,6 +80,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.prevIn, a.prevOut, a.prevAt = msg.inTotal, msg.outTotal, now
 		a.main.setData(msg)
+		if a.sub != nil {
+			a.sub, _ = a.sub.Update(ratesMsg(a.main.rates))
+		}
 		return a, pollCmd()
 	case pollTickMsg:
 		return a, fetchCmd(a.client)
@@ -154,6 +161,8 @@ func RenderScreen(name string, width, height int) (string, error) {
 		a.sub.Init()
 	}
 	m, _ := a.Update(tea.WindowSizeMsg{Width: width, Height: height})
+	a = m.(App)
+	m, _ = a.Update(ratesMsg(a.main.rates)) // subviews show fake rates in presets
 	a = m.(App)
 	return a.View(), nil
 }

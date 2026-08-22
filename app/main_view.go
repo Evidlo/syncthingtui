@@ -481,6 +481,10 @@ func (m MainModel) viewFolders() string {
 	list.WriteString("\n")
 	list.WriteString(listRow(m.folderIdx == len(m.folders), keyStyle.Render("+"), "Add Folder"))
 	list.WriteString(listRow(m.folderIdx == len(m.folders)+1, keyStyle.Render("⟳"), "Rescan All"))
+	curLine := m.folderIdx
+	if m.folderIdx >= len(m.folders) { // past the blank separator row
+		curLine++
+	}
 
 	var detail string
 	switch m.folderIdx {
@@ -499,7 +503,7 @@ func (m MainModel) viewFolders() string {
 			progressBar(f.Pct, m.width-leftW-8) + fmt.Sprintf(" %d%%\n\n", f.Pct) +
 			buttonRow(m.folderButtons(), m.folderBtn)
 	}
-	return m.splitPane(list.String(), detail)
+	return m.splitPane(scrollToCursor(list.String(), curLine, m.height-5), detail)
 }
 
 func (m MainModel) viewDevices() string {
@@ -510,6 +514,10 @@ func (m MainModel) viewDevices() string {
 	list.WriteString("\n")
 	list.WriteString(listRow(m.deviceIdx == len(m.devices), keyStyle.Render("+"), "Add Device"))
 	list.WriteString(listRow(m.deviceIdx == len(m.devices)+1, keyStyle.Render("≡"), "Recent Changes"))
+	curLine := m.deviceIdx
+	if m.deviceIdx >= len(m.devices) { // past the blank separator row
+		curLine++
+	}
 
 	var detail string
 	switch m.deviceIdx {
@@ -527,7 +535,7 @@ func (m MainModel) viewDevices() string {
 			progressBar(d.Pct, m.width-leftW-8) + fmt.Sprintf(" %d%%\n\n", d.Pct) +
 			buttonRow(m.deviceButtons(), m.deviceBtn)
 	}
-	return m.splitPane(list.String(), detail)
+	return m.splitPane(scrollToCursor(list.String(), curLine, m.height-5), detail)
 }
 
 func (m MainModel) viewThisDevice() string {
@@ -557,7 +565,7 @@ func (m MainModel) viewAlerts() string {
 		dimStyle.Render(sel.Time) + "\n\n" +
 		lipgloss.NewStyle().Width(m.width-leftW-4).Render(sel.Body) + "\n\n" +
 		buttonRow(sel.Buttons, m.alertBtn)
-	return m.splitPane(list.String(), detail)
+	return m.splitPane(scrollToCursor(list.String(), m.alertIdx, m.height-5), detail)
 }
 
 func (m MainModel) viewActions() string {
