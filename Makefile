@@ -31,17 +31,9 @@ release: syncthingtui
 	gh release create $(VERSION) syncthingtui --generate-notes
 
 # --- Debian packaging -------------------------------------------------------
-# One-shot release. Commit your upstream work on master, then from master:
+# One-shot release
 #
 #     make debian V=1.0.2
-#
-# Idempotent: every step checks whether it already happened, so re-running
-# after a failure resumes instead of duplicating work.
-#
-# This drives the whole release from master; it checks out the packaging
-# branch internally and always returns you to master, even on failure. The
-# packaging branch receives upstream sources only through uscan + gbp here -
-# never merge master into it by hand, that breaks the gbp layout.
 
 DEBEMAIL ?= evan_debian@widloski.com
 DEBFULLNAME ?= Evan Widloski
