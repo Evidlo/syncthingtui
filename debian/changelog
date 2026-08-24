@@ -1,3 +1,9 @@
+syncthingtui (1.0.2-1) unstable; urgency=medium
+
+  * New upstream release.
+
+ -- Evan Widloski <evan_debian@widloski.com>  Sun, 23 Aug 2026 22:44:42 -0500
+
 syncthingtui (1.0.1-1) unstable; urgency=medium
 
   * Initial release (Closes: #1142005)
