@@ -47,7 +47,8 @@ DEBEMAIL ?= evan_debian@widloski.com
 DEBFULLNAME ?= Evan Widloski
 DEB_BUILD_DIR ?= ../build-area
 DEB_BRANCH ?= debian
-DEB_REMOTES ?= origin salsa
+# origin has two push URLs (GitHub + Salsa), so one push reaches both.
+DEB_REMOTES ?= origin
 
 .PHONY: debian debian-check debian-tag debian-package
 .NOTPARALLEL:
