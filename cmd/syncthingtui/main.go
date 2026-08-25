@@ -21,6 +21,7 @@
 //	go run ./cmd/syncthingtui                     # live TUI (auto-discovers local syncthing)
 //	go run ./cmd/syncthingtui -fake               # fake-data mode (no syncthing needed)
 //	go run ./cmd/syncthingtui -address 127.0.0.1:8384 -api-key XYZ
+//	go run ./cmd/syncthingtui -config /path/to/config.xml  # explicit config.xml
 //	go run ./cmd/syncthingtui -screen <name>      # static render (80x60, fake data)
 //	go run ./cmd/syncthingtui -list               # list static screens
 package main
@@ -92,6 +93,7 @@ func main() {
 	fake := flag.Bool("fake", false, "use fake data instead of a live syncthing")
 	address := flag.String("address", "", "syncthing GUI address (default: from config.xml)")
 	apiKey := flag.String("api-key", os.Getenv("SYNCTHING_API_KEY"), "API key (default: from config.xml)")
+	config := flag.String("config", "", "path to syncthing config.xml (default: auto-discover)")
 	flag.Parse()
 
 	if *list {
@@ -115,10 +117,20 @@ func main() {
 	if !*fake {
 		addr, key := *address, *apiKey
 		if addr == "" || key == "" {
-			dAddr, dKey, err := client.Discover()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "cannot find local syncthing (%v); use -address/-api-key or -fake\n", err)
-				os.Exit(1)
+			var dAddr, dKey string
+			var err error
+			if *config != "" {
+				dAddr, dKey, err = client.DiscoverPath(*config)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "cannot read syncthing config %q (%v)\n", *config, err)
+					os.Exit(1)
+				}
+			} else {
+				dAddr, dKey, err = client.Discover()
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "cannot find local syncthing (%v); use -config/-address/-api-key or -fake\n", err)
+					os.Exit(1)
+				}
 			}
 			if addr == "" {
 				addr = dAddr

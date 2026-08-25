@@ -41,6 +41,13 @@ of the
 environment variable, or, if that is unset, to the key read from
 .IR config.xml .
 .TP
+.BI \-config " PATH"
+Path to the Syncthing
+.I config.xml
+to read the GUI address and API key from, instead of auto-discovering it in
+the default locations. Useful for a non-standard configuration directory or a
+second instance.
+.TP
 .B \-fake
 Run against built-in fake data instead of a live Syncthing instance. Useful
 for trying out the interface without a running daemon.

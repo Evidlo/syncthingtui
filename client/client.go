@@ -491,10 +491,16 @@ type guiConfig struct {
 // (new ~/.local/state and legacy ~/.config locations).
 func Discover() (address, apiKey string, err error) {
 	home, _ := os.UserHomeDir()
-	paths := []string{
+	return DiscoverPath(
 		filepath.Join(home, ".local/state/syncthing/config.xml"),
 		filepath.Join(home, ".config/syncthing/config.xml"),
-	}
+	)
+}
+
+// DiscoverPath reads address and API key from the first of the given
+// config.xml paths that parses and carries an apikey. It is used both by
+// Discover (default locations) and by the -config flag (explicit path).
+func DiscoverPath(paths ...string) (address, apiKey string, err error) {
 	for _, p := range paths {
 		data, rerr := os.ReadFile(p)
 		if rerr != nil {

@@ -11,8 +11,9 @@ Stage 4 in progress. Done: client/ package (REST subset + config.xml Discover);
 app live mode (App polls every 3s → dataMsg; rates from byte-total deltas;
 MainModel.action() runs against client or fake fallback). Wired: pause/resume
 folder+device, rescan one/all, alert Dismiss, live folders/devices/stats/alerts.
-CLI: syncthingtui [-fake | -address X -api-key Y] (default: Discover from
-~/.local/state|.config/syncthing/config.xml; honors gui tls attr → https,
+CLI: syncthingtui [-fake | -address X -api-key Y | -config PATH] (default:
+Discover from ~/.local/state|.config/syncthing/config.xml; -config reads a
+specific config.xml via client.DiscoverPath; honors gui tls attr → https,
 cert verification skipped — syncthing GUI certs are self-signed/expired,
 API key is the auth). scripts/rocheck = read-only GET check vs real instance. Integration smoke test:
 `./scripts/test_live.sh` — throwaway syncthing home in /tmp, random port, runs

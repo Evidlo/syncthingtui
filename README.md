@@ -19,6 +19,8 @@ Usage of syncthingtui:
     	syncthing GUI address (default: from config.xml)
   -api-key string
     	API key (default: from config.xml)
+  -config string
+    	path to syncthing config.xml (default: auto-discover)
   -fake
     	use fake data instead of a live syncthing
   -list
