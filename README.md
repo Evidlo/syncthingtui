@@ -2,7 +2,7 @@
 
 A Syncthing TUI client with nearly-complete feature parity with the Syncthing web GUI.
 
-![screenshot](screenshot.png)
+![TUI demo](st.svg)
 
 Note that this app was entirely vibe-engineered from `CHAT.txt`
 
